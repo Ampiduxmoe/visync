@@ -6,10 +6,10 @@ import com.example.visync.ui.components.lists.PlaylistItem
 
 @Composable
 fun PlaylistsScreen(
-    playlistsScreenViewModel: PlaylistsScreenViewModel
+    playlistsUiState: PlaylistsUiState
 ) {
     Column {
-        val playlists = playlistsScreenViewModel.getPlaylists()
+        val playlists = playlistsUiState.playlists
         for (playlist in playlists) {
             PlaylistItem(playlist)
         }
