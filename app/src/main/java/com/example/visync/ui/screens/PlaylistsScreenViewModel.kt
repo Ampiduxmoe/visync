@@ -11,5 +11,7 @@ class PlaylistsScreenViewModel @Inject constructor() : ViewModel() {
 
     @Inject lateinit var playlistsRepository: PlaylistsRepository
 
-    val playlists: List<Playlist> = playlistsRepository.getAllPlaylists()
+    fun getPlaylists(): List<Playlist> {
+        return playlistsRepository.getAllPlaylists()
+    }
 }

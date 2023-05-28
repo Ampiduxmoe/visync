@@ -9,7 +9,7 @@ fun PlaylistsScreen(
     playlistsScreenViewModel: PlaylistsScreenViewModel
 ) {
     Column {
-        val playlists = playlistsScreenViewModel.playlists
+        val playlists = playlistsScreenViewModel.getPlaylists()
         for (playlist in playlists) {
             PlaylistItem(playlist)
         }
