@@ -55,7 +55,7 @@ fun ModalNavigationDrawerContent(
                 )
                 IconButton(onClick = onDrawerClicked) {
                     Icon(
-                        imageVector = Icons.Default.Menu,
+                        imageVector = Icons.Filled.Menu,
                         contentDescription = stringResource(id = R.string.navigation_drawer)
                     )
                 }
@@ -70,7 +70,7 @@ fun ModalNavigationDrawerContent(
                 contentColor = MaterialTheme.colorScheme.onTertiaryContainer
             ) {
                 Icon(
-                    imageVector = Icons.Default.Edit,
+                    imageVector = Icons.Filled.Edit,
                     contentDescription = stringResource(id = R.string.navigation_drawer_fab),
                     modifier = Modifier.size(18.dp)
                 )

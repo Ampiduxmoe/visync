@@ -20,6 +20,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.ui.components.VisyncTopAppBar
 import com.example.visync.ui.components.navigation.ModalNavigationDrawerContent
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.VisyncBottomNavigationBar
@@ -85,6 +86,11 @@ fun VisyncNavigationWrapper(
                 preferredDisplayMode = preferredDisplayMode,
                 navController = navController,
                 selectedDestination = selectedDestination,
+                openDrawer = {
+                    scope.launch {
+                        drawerState.open()
+                    }
+                },
                 navigateToMainDestination = navigationActions::navigateTo
             )
         }
@@ -96,6 +102,7 @@ fun VisyncAppContent(
     preferredDisplayMode: ContentDisplayMode,
     navController: NavHostController,
     selectedDestination: String,
+    openDrawer: () -> Unit,
     navigateToMainDestination: (Route) -> Unit,
 ) {
     Column(
@@ -103,6 +110,10 @@ fun VisyncAppContent(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.inverseOnSurface)
     ) {
+        VisyncTopAppBar(
+            openDrawer = openDrawer,
+            selectedDestination = selectedDestination,
+        )
         VisyncNavHost(
             navController = navController,
             modifier = Modifier.weight(1f),
