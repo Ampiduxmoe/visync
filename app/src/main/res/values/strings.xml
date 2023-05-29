@@ -1,5 +1,8 @@
 <resources>
     <string name="app_name">visync</string>
+    <string name="navigation_drawer">Navigation Drawer</string>
+    <string name="navigation_drawer_fab">Navigation Drawer Button</string>
+    <string name="navigation_drawer_fab_text">Some Action</string>
     <string name="tab_playlists">Play</string>
     <string name="tab_rooms_join">Join</string>
     <string name="tab_my_profile">Profile</string>

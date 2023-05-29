@@ -2,6 +2,7 @@ package com.example.visync.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
@@ -15,12 +16,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.ui.components.navigation.ModalNavigationDrawerContent
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.screens.PlaylistsScreen
 import com.example.visync.ui.screens.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.RoomsScreen
 import com.example.visync.ui.screens.RoomsScreenViewModel
+import kotlinx.coroutines.launch
 
 @Composable
 fun VisyncApp(
@@ -54,14 +57,30 @@ fun VisyncNavigationWrapper(
         navBackStackEntry?.destination?.route ?: Route.Playlists.routeString
 
     if (navigationType == NavigationType.DRAWER_AND_BOTTOM_NAVBAR) {
-        /*
-            Put drawer and bottom navbar here
-         */
-
-        VisyncAppContent(
-            preferredDisplayMode = preferredDisplayMode,
-            navController = navController
-        )
+        ModalNavigationDrawer(
+            drawerContent = {
+                ModalNavigationDrawerContent(
+                    selectedDestination = selectedDestination,
+                    navigateTo = {
+                        navigationActions.navigateTo(it)
+                        scope.launch {
+                            drawerState.close()
+                        }
+                    },
+                    onDrawerClicked = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                    }
+                )
+            },
+            drawerState = drawerState
+        ) {
+            VisyncAppContent(
+                preferredDisplayMode = preferredDisplayMode,
+                navController = navController
+            )
+        }
     }
 }
 
@@ -105,6 +124,16 @@ fun VisyncNavHost(
             }
         }
         composable(Route.Friends.routeString) {
+            Column() {
+
+            }
+        }
+        composable(Route.RoomsManage.routeString) {
+            Column() {
+
+            }
+        }
+        composable(Route.AppSettings.routeString) {
             Column() {
 
             }

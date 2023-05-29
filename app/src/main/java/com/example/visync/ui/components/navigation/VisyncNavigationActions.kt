@@ -45,37 +45,37 @@ val ACCOUNT_RELATED_DESTINATIONS = listOf(
 sealed class Route(
     val routeString: String,
     val icon: RouteIcon,
-    @StringRes val resourceId: Int
+    @StringRes val actionDescriptionId: Int
 ) {
     object Playlists : Route(
         routeString = "playlists",
         icon = RouteIcon(Icons.Default.PlayArrow),
-        resourceId = R.string.tab_playlists
+        actionDescriptionId = R.string.tab_playlists
     )
     object RoomsJoin : Route(
         routeString = "rooms_join",
         icon = RouteIcon(R.drawable.ic_phones),
-        resourceId = R.string.tab_rooms_join
+        actionDescriptionId = R.string.tab_rooms_join
     )
     object MyProfile : Route(
         routeString = "my_profile",
         icon = RouteIcon(Icons.Default.Person),
-        resourceId = R.string.tab_my_profile
+        actionDescriptionId = R.string.tab_my_profile
     )
     object Friends : Route(
         routeString = "my_friends",
         icon = RouteIcon(R.drawable.ic_friends),
-        resourceId = R.string.tab_my_friends
+        actionDescriptionId = R.string.tab_my_friends
     )
     object RoomsManage : Route(
         routeString = "rooms_manage",
         icon = RouteIcon(R.drawable.ic_group_add),
-        resourceId = R.string.tab_rooms_manage
+        actionDescriptionId = R.string.tab_rooms_manage
     )
     object AppSettings : Route(
         routeString = "app_settings",
         icon = RouteIcon(Icons.Default.Settings),
-        resourceId = R.string.tab_app_settings
+        actionDescriptionId = R.string.tab_app_settings
     )
 }
 
