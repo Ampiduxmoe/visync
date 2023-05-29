@@ -1,7 +1,10 @@
 package com.example.visync.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
@@ -9,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -18,6 +22,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.visync.ui.components.navigation.ModalNavigationDrawerContent
 import com.example.visync.ui.components.navigation.Route
+import com.example.visync.ui.components.navigation.VisyncBottomNavigationBar
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.screens.PlaylistsScreen
 import com.example.visync.ui.screens.PlaylistsScreenViewModel
@@ -61,7 +66,7 @@ fun VisyncNavigationWrapper(
             drawerContent = {
                 ModalNavigationDrawerContent(
                     selectedDestination = selectedDestination,
-                    navigateTo = {
+                    navigateToAccountDestination = {
                         navigationActions.navigateTo(it)
                         scope.launch {
                             drawerState.close()
@@ -78,7 +83,9 @@ fun VisyncNavigationWrapper(
         ) {
             VisyncAppContent(
                 preferredDisplayMode = preferredDisplayMode,
-                navController = navController
+                navController = navController,
+                selectedDestination = selectedDestination,
+                navigateToMainDestination = navigationActions::navigateTo
             )
         }
     }
@@ -87,20 +94,36 @@ fun VisyncNavigationWrapper(
 @Composable
 fun VisyncAppContent(
     preferredDisplayMode: ContentDisplayMode,
-    navController: NavHostController
+    navController: NavHostController,
+    selectedDestination: String,
+    navigateToMainDestination: (Route) -> Unit,
 ) {
-    VisyncNavHost(
-        navController = navController
-    )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.inverseOnSurface)
+    ) {
+        VisyncNavHost(
+            navController = navController,
+            modifier = Modifier.weight(1f),
+        )
+        VisyncBottomNavigationBar(
+            selectedDestination = selectedDestination,
+            navigateToMainDestination = navigateToMainDestination
+        )
+    }
+
 }
 
 @Composable
 fun VisyncNavHost(
-    navController: NavHostController
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
 ) {
     NavHost(
         navController = navController,
         startDestination = Route.Playlists.routeString,
+        modifier = modifier,
     ) {
         composable(Route.Playlists.routeString) {
             val playlistsScreenViewModel = hiltViewModel<PlaylistsScreenViewModel>()

@@ -33,7 +33,7 @@ import com.example.visync.R
 @Composable
 fun ModalNavigationDrawerContent(
     selectedDestination: String,
-    navigateTo: (Route) -> Unit,
+    navigateToAccountDestination: (Route) -> Unit,
     onDrawerClicked: () -> Unit = {}
 ) {
     ModalDrawerSheet {
@@ -113,7 +113,7 @@ fun ModalNavigationDrawerContent(
                     colors = NavigationDrawerItemDefaults.colors(
                         unselectedContainerColor = Color.Transparent
                     ),
-                    onClick = { navigateTo(accountDestination) }
+                    onClick = { navigateToAccountDestination(accountDestination) }
                 )
             }
         }
