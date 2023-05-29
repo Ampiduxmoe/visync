@@ -1,6 +1,5 @@
 package com.example.visync.data.playlists
 
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 interface PlaylistsRepository {

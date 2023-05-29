@@ -1,10 +1,12 @@
 package com.example.visync.data.rooms
 
+import kotlinx.coroutines.flow.StateFlow
+
 interface RoomsRepository {
 
-    fun getAllRooms(): List<Room>
+    val rooms: StateFlow<List<Room>>
 
     fun getRoom(id: Long): Room?
 
-    fun addRoom(playlist: Room): Boolean
+    fun addRoom(room: Room): Boolean
 }

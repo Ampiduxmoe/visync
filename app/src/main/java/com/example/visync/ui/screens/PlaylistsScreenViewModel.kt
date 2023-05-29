@@ -12,7 +12,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PlaylistsScreenViewModel @Inject constructor(
-    public val playlistsRepository: PlaylistsRepository
+    private val playlistsRepository: PlaylistsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlaylistsUiState(loading = true))
@@ -30,7 +30,7 @@ class PlaylistsScreenViewModel @Inject constructor(
         }
     }
 
-    fun setSelectedPlaylist(playlistId: Long, displayMode: PlaylistsDisplayMode) {
+    fun setSelectedPlaylist(playlistId: Long) {
         val playlist = uiState.value.playlists.find { it.id == playlistId }
         _uiState.value = _uiState.value.copy(
             selectedPlaylist = playlist,
@@ -51,7 +51,3 @@ data class PlaylistsUiState(
     val loading: Boolean = false,
     val error: String? = null
 )
-
-enum class PlaylistsDisplayMode {
-    SINGLE_COLUMN, DUAL_COLUMN
-}

@@ -6,10 +6,10 @@ import com.example.visync.ui.components.lists.RoomItem
 
 @Composable
 fun RoomsScreen(
-    roomsScreenViewModel: RoomsScreenViewModel
+    roomsUiState: RoomsUiState
 ) {
     Column {
-        val rooms = roomsScreenViewModel.getRooms()
+        val rooms = roomsUiState.rooms
         for (room in rooms) {
             RoomItem(room)
         }

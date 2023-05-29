@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">visync</string>
+    <string name="tab_playlists">Play</string>
+    <string name="tab_rooms_join">Join</string>
+    <string name="tab_my_profile">Profile</string>
+    <string name="tab_my_friends">Friends</string>
+    <string name="tab_rooms_manage">Manage rooms</string>
+    <string name="tab_app_settings">Settings</string>
 </resources>
