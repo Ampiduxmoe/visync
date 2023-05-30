@@ -1,12 +1,16 @@
 package com.example.visync.ui
 
 import android.util.Log
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -22,11 +26,12 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.visync.ui.components.VisyncTopAppBar
 import com.example.visync.ui.components.navigation.ModalNavigationDrawerContent
+import com.example.visync.ui.components.navigation.PermanentNavigationDrawerContent
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.VisyncBottomNavigationBar
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
+import com.example.visync.ui.components.navigation.VisyncNavigationRail
 import com.example.visync.ui.screens.PlaylistsScreen
 import com.example.visync.ui.screens.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.RoomsScreen
@@ -84,68 +89,109 @@ fun VisyncNavigationWrapper(
     val selectedDestination =
         navBackStackEntry?.destination?.route ?: Route.Playlists.routeString
 
-    if (navigationType == NavigationType.BOTTOM_NAVBAR_AND_DRAWER) {
-        ModalNavigationDrawer(
-            drawerContent = {
-                ModalNavigationDrawerContent(
+    when (navigationType) {
+        NavigationType.BOTTOM_NAVBAR_AND_DRAWER,
+        NavigationType.RAIL_AND_DRAWER-> {
+            val railAndDrawerScrollState = rememberScrollState()
+            ModalNavigationDrawer(
+                drawerContent = {
+                    ModalNavigationDrawerContent(
+                        selectedDestination = selectedDestination,
+                        navigateToDestination = {
+                            navigationActions.navigateTo(it)
+                            scope.launch {
+                                drawerState.close()
+                            }
+                        },
+                        scrollState = railAndDrawerScrollState,
+                        showMainDestinations = true,
+                        closeDrawer = {
+                            scope.launch {
+                                drawerState.close()
+                            }
+                        }
+                    )
+                },
+                drawerState = drawerState
+            ) {
+                VisyncAppContent(
+                    navigationType = navigationType,
+                    preferredDisplayMode = preferredDisplayMode,
+                    navController = navController,
                     selectedDestination = selectedDestination,
-                    navigateToAccountDestination = {
-                        navigationActions.navigateTo(it)
+                    railAndDrawerScrollState = railAndDrawerScrollState,
+                    openDrawer = {
                         scope.launch {
-                            drawerState.close()
+                            drawerState.open()
                         }
                     },
-                    onDrawerClicked = {
-                        scope.launch {
-                            drawerState.close()
-                        }
-                    }
+                    navigateToDestination = navigationActions::navigateTo
                 )
-            },
-            drawerState = drawerState
-        ) {
-            VisyncAppContent(
-                preferredDisplayMode = preferredDisplayMode,
-                navController = navController,
-                selectedDestination = selectedDestination,
-                openDrawer = {
-                    scope.launch {
-                        drawerState.open()
-                    }
-                },
-                navigateToMainDestination = navigationActions::navigateTo
-            )
+            }
+        }
+        NavigationType.PERMANENT_DRAWER -> {
+            PermanentNavigationDrawer(drawerContent = {
+                PermanentNavigationDrawerContent(
+                    selectedDestination = selectedDestination,
+                    navigateToDestination = navigationActions::navigateTo,
+                    scrollState = rememberScrollState()
+                )
+            }) {
+                VisyncAppContent(
+                    navigationType = navigationType,
+                    preferredDisplayMode = preferredDisplayMode,
+                    navController = navController,
+                    selectedDestination = selectedDestination,
+                    railAndDrawerScrollState = null,
+                    openDrawer = {},
+                    navigateToDestination = navigationActions::navigateTo
+                )
+            }
         }
     }
 }
 
 @Composable
 fun VisyncAppContent(
+    navigationType: NavigationType,
     preferredDisplayMode: ContentDisplayMode,
     navController: NavHostController,
     selectedDestination: String,
+    railAndDrawerScrollState: ScrollState?,
     openDrawer: () -> Unit,
-    navigateToMainDestination: (Route) -> Unit,
+    navigateToDestination: (Route) -> Unit,
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.inverseOnSurface)
     ) {
-        VisyncTopAppBar(
-            openDrawer = openDrawer,
-            selectedDestination = selectedDestination,
-        )
-        VisyncNavHost(
-            navController = navController,
-            modifier = Modifier.weight(1f),
-        )
-        VisyncBottomNavigationBar(
-            selectedDestination = selectedDestination,
-            navigateToMainDestination = navigateToMainDestination
-        )
-    }
+        if (navigationType == NavigationType.RAIL_AND_DRAWER) {
+            VisyncNavigationRail(
+                selectedDestination = selectedDestination,
+                navigateToDestination = navigateToDestination,
+                scrollState = railAndDrawerScrollState!!,
+                openDrawer = openDrawer,
+                showDestinationLabels = false
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.inverseOnSurface)
+        ) {
+            VisyncNavHost(
+                navController = navController,
+                modifier = Modifier.weight(1f),
+            )
+            if (navigationType == NavigationType.BOTTOM_NAVBAR_AND_DRAWER) {
+                VisyncBottomNavigationBar(
+                    selectedDestination = selectedDestination,
+                    navigateToDestination = navigateToDestination
+                )
+            }
 
+        }
+    }
 }
 
 @Composable

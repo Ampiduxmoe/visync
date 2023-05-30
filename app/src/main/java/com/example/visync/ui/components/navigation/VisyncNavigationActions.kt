@@ -6,7 +6,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import com.example.visync.R
@@ -49,6 +51,13 @@ sealed class Route(
     val icon: RouteIcon,
     @StringRes val actionDescriptionId: Int
 ) {
+    @Composable
+    fun getImageVectorIcon(): ImageVector = if (icon.resourceId != null) {
+        ImageVector.vectorResource(id = icon.resourceId)
+    } else {
+        icon.imageVector
+    }!!
+
     object Playlists : Route(
         routeString = "playlists",
         icon = RouteIcon(Icons.Filled.PlayArrow),
