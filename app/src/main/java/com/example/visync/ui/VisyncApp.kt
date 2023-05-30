@@ -1,5 +1,6 @@
 package com.example.visync.ui
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -35,13 +37,33 @@ import kotlinx.coroutines.launch
 fun VisyncApp(
     windowSize: WindowSizeClass
 ) {
-    /*
-        TODO some adaptivity calculations
-     */
+    val navigationType: NavigationType
+    val preferredDisplayMode: ContentDisplayMode
+
+    Log.i("WindowSize", "widthSizeClass=${windowSize.widthSizeClass}")
+    Log.i("WindowSize", "heightSizeClass=${windowSize.heightSizeClass}")
+    when (windowSize.widthSizeClass) {
+        WindowWidthSizeClass.Compact -> {
+            navigationType = NavigationType.BOTTOM_NAVBAR_AND_DRAWER
+            preferredDisplayMode = ContentDisplayMode.SINGLE_COLUMN
+        }
+        WindowWidthSizeClass.Medium -> {
+            navigationType = NavigationType.RAIL_AND_DRAWER
+            preferredDisplayMode = ContentDisplayMode.SINGLE_COLUMN
+        }
+        WindowWidthSizeClass.Expanded -> {
+            navigationType = NavigationType.PERMANENT_DRAWER
+            preferredDisplayMode = ContentDisplayMode.DUAL_COLUMN
+        }
+        else -> {
+            navigationType = NavigationType.BOTTOM_NAVBAR_AND_DRAWER
+            preferredDisplayMode = ContentDisplayMode.SINGLE_COLUMN
+        }
+    }
 
     VisyncNavigationWrapper(
-        navigationType = NavigationType.DRAWER_AND_BOTTOM_NAVBAR,
-        preferredDisplayMode = ContentDisplayMode.SINGLE_COLUMN
+        navigationType = navigationType,
+        preferredDisplayMode = preferredDisplayMode,
     )
 }
 
@@ -62,7 +84,7 @@ fun VisyncNavigationWrapper(
     val selectedDestination =
         navBackStackEntry?.destination?.route ?: Route.Playlists.routeString
 
-    if (navigationType == NavigationType.DRAWER_AND_BOTTOM_NAVBAR) {
+    if (navigationType == NavigationType.BOTTOM_NAVBAR_AND_DRAWER) {
         ModalNavigationDrawer(
             drawerContent = {
                 ModalNavigationDrawerContent(
@@ -176,7 +198,7 @@ fun VisyncNavHost(
 }
 
 enum class NavigationType {
-    DRAWER_AND_BOTTOM_NAVBAR, RAIL, PERMANENT_DRAWER
+    BOTTOM_NAVBAR_AND_DRAWER, RAIL_AND_DRAWER, PERMANENT_DRAWER
 }
 
 enum class ContentDisplayMode {
