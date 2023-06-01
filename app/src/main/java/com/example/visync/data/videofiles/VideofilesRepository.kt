@@ -7,5 +7,5 @@ interface VideofilesRepository {
 
     fun getVideofile(id: Long): Videofile?
 
-    fun addVideofile(videofile: Videofile): Boolean
+    fun tryAddVideofile(videofile: Videofile): Boolean
 }

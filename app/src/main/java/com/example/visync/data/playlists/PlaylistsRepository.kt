@@ -8,5 +8,5 @@ interface PlaylistsRepository {
 
     fun getPlaylist(id: Long): Playlist?
 
-    fun addPlaylist(playlist: Playlist): Boolean
+    fun tryAddPlaylist(playlist: Playlist): Boolean
 }

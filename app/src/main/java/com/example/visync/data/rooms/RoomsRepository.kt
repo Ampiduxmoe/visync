@@ -8,5 +8,5 @@ interface RoomsRepository {
 
     fun getRoom(id: Long): Room?
 
-    fun addRoom(room: Room): Boolean
+    fun tryAddRoom(room: Room): Boolean
 }

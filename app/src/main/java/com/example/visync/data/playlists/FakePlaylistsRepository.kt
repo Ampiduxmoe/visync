@@ -26,7 +26,7 @@ class FakePlaylistsRepository : PlaylistsRepository {
         return _playlists.value.firstOrNull() { it.id == id }
     }
 
-    override fun addPlaylist(playlist: Playlist): Boolean {
+    override fun tryAddPlaylist(playlist: Playlist): Boolean {
         if (_playlists.value.contains(playlist)) {
             return false
         }

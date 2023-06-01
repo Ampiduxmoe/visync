@@ -27,7 +27,7 @@ class FakeVideofilesRepository : VideofilesRepository {
         return _videofiles.value.firstOrNull() { it.id == id }
     }
 
-    override fun addVideofile(videoFile: Videofile): Boolean {
+    override fun tryAddVideofile(videoFile: Videofile): Boolean {
         if (_videofiles.value.contains(videoFile)) {
             return false
         }

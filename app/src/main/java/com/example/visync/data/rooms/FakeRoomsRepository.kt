@@ -26,7 +26,7 @@ class FakeRoomsRepository : RoomsRepository {
         return _rooms.value.firstOrNull() { it.id == id }
     }
 
-    override fun addRoom(room: Room): Boolean {
+    override fun tryAddRoom(room: Room): Boolean {
         if (_rooms.value.contains(room)) {
             return false
         }
