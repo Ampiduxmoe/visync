@@ -6,4 +6,5 @@ data class Videofile(
     val id: Long,
     val uri: Uri,
     val filename: String,
+    val playlistId: Long,
 )

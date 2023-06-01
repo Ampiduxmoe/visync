@@ -12,13 +12,17 @@ class FakeVideofilesRepository : VideofilesRepository {
     )
 
     private val _videofiles = MutableStateFlow<List<Videofile>>(
-        (1..9).map {
-            Videofile(
-                id = it.toLong(),
-                uri = Uri.EMPTY,
-                filename = "${indexWords[it-1].capitalize(Locale.current)} videofile"
-            )
-        }
+        (1..9).map { playlistId ->
+            var videofileCount = 0
+            (1..playlistId).map {
+                Videofile(
+                    id = (++videofileCount).toLong(),
+                    uri = Uri.EMPTY,
+                    filename = "${indexWords[it-1].capitalize(Locale.current)} videofile",
+                    playlistId = playlistId.toLong()
+                )
+            }
+        }.flatten()
     )
 
     override val videofiles: StateFlow<List<Videofile>> = _videofiles
