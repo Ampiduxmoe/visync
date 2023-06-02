@@ -105,7 +105,7 @@ private fun DrawerSheetContent(
                 IconButton(onClick = closeDrawer) {
                     Icon(
                         imageVector = Icons.Filled.Menu,
-                        contentDescription = stringResource(id = R.string.navigation_drawer)
+                        contentDescription = stringResource(id = R.string.desc_navigation_drawer)
                     )
                 }
             }
@@ -202,7 +202,7 @@ fun VisyncNavigationRail(
                 icon = {
                     Icon(
                         imageVector = Icons.Default.Menu,
-                        contentDescription = stringResource(id = R.string.navigation_drawer)
+                        contentDescription = stringResource(id = R.string.desc_navigation_drawer)
                     )
                 },
                 modifier = Modifier.padding(vertical = 16.dp),

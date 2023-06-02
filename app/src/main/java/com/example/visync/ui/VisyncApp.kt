@@ -182,6 +182,7 @@ fun VisyncAppContent(
             VisyncNavHost(
                 navController = navController,
                 modifier = Modifier.weight(1f),
+                openDrawer = openDrawer
             )
             if (navigationType == NavigationType.BOTTOM_NAVBAR_AND_DRAWER) {
                 VisyncBottomNavigationBar(
@@ -197,6 +198,7 @@ fun VisyncAppContent(
 @Composable
 fun VisyncNavHost(
     navController: NavHostController,
+    openDrawer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -211,7 +213,8 @@ fun VisyncNavHost(
             PlaylistsScreen(
                 playlistsUiState = playlistsUiState,
                 openPlaylist = { playlistsScreenViewModel.setSelectedPlaylist(it.id) },
-                closePlaylist = { playlistsScreenViewModel.closeDetailScreen() }
+                closePlaylist = { playlistsScreenViewModel.closeDetailScreen() },
+                openDrawer = openDrawer
             )
         }
         composable(Route.RoomsJoin.routeString) {

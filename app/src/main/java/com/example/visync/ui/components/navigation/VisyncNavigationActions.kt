@@ -61,32 +61,32 @@ sealed class Route(
     object Playlists : Route(
         routeString = "playlists",
         icon = RouteIcon(Icons.Filled.PlayArrow),
-        actionDescriptionId = R.string.tab_playlists
+        actionDescriptionId = R.string.tab_label_playlists
     )
     object RoomsJoin : Route(
         routeString = "rooms_join",
         icon = RouteIcon(R.drawable.ic_phones),
-        actionDescriptionId = R.string.tab_rooms_join
+        actionDescriptionId = R.string.tab_label_rooms_join
     )
     object MyProfile : Route(
         routeString = "my_profile",
         icon = RouteIcon(Icons.Filled.Person),
-        actionDescriptionId = R.string.tab_my_profile
+        actionDescriptionId = R.string.tab_label_my_profile
     )
     object Friends : Route(
         routeString = "my_friends",
         icon = RouteIcon(R.drawable.ic_friends),
-        actionDescriptionId = R.string.tab_my_friends
+        actionDescriptionId = R.string.tab_label_my_friends
     )
     object RoomsManage : Route(
         routeString = "rooms_manage",
         icon = RouteIcon(R.drawable.ic_group_add),
-        actionDescriptionId = R.string.tab_rooms_manage
+        actionDescriptionId = R.string.tab_label_rooms_manage
     )
     object AppSettings : Route(
         routeString = "app_settings",
         icon = RouteIcon(Icons.Filled.Settings),
-        actionDescriptionId = R.string.tab_app_settings
+        actionDescriptionId = R.string.tab_label_app_settings
     )
 }
 

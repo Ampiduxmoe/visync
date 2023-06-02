@@ -9,28 +9,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.visync.data.playlists.Playlist
-import com.example.visync.data.playlists.PlaylistWithVideofiles
+import com.example.visync.data.videofiles.Videofile
 
 @Composable
-fun PlaylistItem(
-    playlistWithVideofiles: PlaylistWithVideofiles,
-    openPlaylist: (Playlist) -> Unit,
+fun VideofileItem(
+    videofile: Videofile,
+    onClick: (Videofile) -> Unit,
 ) {
-    val playlist = playlistWithVideofiles.playlist
-    val videofiles = playlistWithVideofiles.videofiles
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(4.dp)
-            .clickable { openPlaylist(playlist) }
+            .clickable { onClick(videofile) }
     ) {
         Text(
-            text = playlist.name,
+            text = videofile.filename,
             style = MaterialTheme.typography.titleMedium
         )
         Text(
-            text = "${videofiles.count()} files",
+            text = videofile.uri.path ?: "path unknown",
             style = MaterialTheme.typography.titleSmall
         )
     }

@@ -1,17 +1,30 @@
 <resources>
     <string name="app_name">visync</string>
 
-    <string name="navigation_drawer">Navigation Drawer</string>
+    <!--description strings for actions/buttons/etc-->
+    <string name="desc_navigation_drawer">Navigation Drawer</string>
+    <string name="desc_back">Back</string>
+
+    <!--this us random string for experimenting-->
     <string name="navigation_drawer_fab">Navigation Drawer Button</string>
     <string name="navigation_drawer_fab_text">Some Action</string>
+    <string name="desc_search_button">Search Button</string>
 
-    <string name="search_button">Search Button</string>
+    <!--tab labels are for navigation buttons-->
+    <string name="tab_label_playlists">Play</string>
+    <string name="tab_label_rooms_join">Join</string>
 
-    <string name="tab_playlists">Play</string>
-    <string name="tab_rooms_join">Join</string>
+    <string name="tab_label_my_profile">Profile</string>
+    <string name="tab_label_my_friends">Friends</string>
+    <string name="tab_label_rooms_manage">Manage rooms</string>
+    <string name="tab_label_app_settings">Settings</string>
 
-    <string name="tab_my_profile">Profile</string>
-    <string name="tab_my_friends">Friends</string>
-    <string name="tab_rooms_manage">Manage rooms</string>
-    <string name="tab_app_settings">Settings</string>
+    <!--tab names are what top app bar should show-->
+    <string name="tab_name_playlists">Playlists</string>
+    <string name="tab_name_rooms_join">Rooms</string>
+
+    <string name="tab_name_my_profile">My profile</string>
+    <string name="tab_name_my_friends">My friends</string>
+    <string name="tab_name_rooms_manage">My Rooms</string>
+    <string name="tab_name_app_settings">Settings</string>
 </resources>
