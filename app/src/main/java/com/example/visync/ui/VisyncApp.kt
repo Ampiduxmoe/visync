@@ -209,7 +209,9 @@ fun VisyncNavHost(
             val playlistsUiState by playlistsScreenViewModel
                 .uiState.collectAsStateWithLifecycle()
             PlaylistsScreen(
-                playlistsUiState = playlistsUiState
+                playlistsUiState = playlistsUiState,
+                openPlaylist = { playlistsScreenViewModel.setSelectedPlaylist(it.id) },
+                closePlaylist = { playlistsScreenViewModel.closeDetailScreen() }
             )
         }
         composable(Route.RoomsJoin.routeString) {

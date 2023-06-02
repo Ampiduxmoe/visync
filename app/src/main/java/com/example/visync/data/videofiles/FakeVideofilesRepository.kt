@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 class FakeVideofilesRepository : VideofilesRepository {
+
     private val indexWords: List<String> = listOf(
         "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"
     )
@@ -31,11 +32,11 @@ class FakeVideofilesRepository : VideofilesRepository {
         return _videofiles.value.firstOrNull() { it.id == id }
     }
 
-    override fun tryAddVideofile(videoFile: Videofile): Boolean {
-        if (_videofiles.value.contains(videoFile)) {
+    override fun tryAddVideofile(videofile: Videofile): Boolean {
+        if (_videofiles.value.contains(videofile)) {
             return false
         }
-        _videofiles.value = _videofiles.value + videoFile
+        _videofiles.value = _videofiles.value + videofile
         return true
     }
 }
