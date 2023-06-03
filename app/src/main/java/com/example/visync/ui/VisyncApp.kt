@@ -10,12 +10,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -26,8 +26,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.ui.components.navigation.CollapsableNavigationDrawer
 import com.example.visync.ui.components.navigation.ModalNavigationDrawerContent
-import com.example.visync.ui.components.navigation.PermanentNavigationDrawerContent
+import com.example.visync.ui.components.navigation.PermanentDrawerVisibility
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.VisyncBottomNavigationBar
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
@@ -89,10 +90,11 @@ fun VisyncNavigationWrapper(
     val selectedDestination =
         navBackStackEntry?.destination?.route ?: Route.Playlists.routeString
 
+    val railAndDrawerScrollState = rememberScrollState()
+
     when (navigationType) {
         NavigationType.BOTTOM_NAVBAR_AND_DRAWER,
         NavigationType.RAIL_AND_DRAWER-> {
-            val railAndDrawerScrollState = rememberScrollState()
             ModalNavigationDrawer(
                 drawerContent = {
                     ModalNavigationDrawerContent(
@@ -130,19 +132,21 @@ fun VisyncNavigationWrapper(
             }
         }
         NavigationType.PERMANENT_DRAWER -> {
-            PermanentNavigationDrawer(drawerContent = {
-                PermanentNavigationDrawerContent(
-                    selectedDestination = selectedDestination,
-                    navigateToDestination = navigationActions::navigateTo,
-                    scrollState = rememberScrollState()
-                )
-            }) {
+            val collapsableDrawerState = remember {
+                mutableStateOf(PermanentDrawerVisibility.EXPANDED)
+            }
+            CollapsableNavigationDrawer(
+                selectedDestination = selectedDestination,
+                navigateToDestination = navigationActions::navigateTo,
+                scrollState = rememberScrollState(),
+                drawerState = collapsableDrawerState,
+            ) {
                 VisyncAppContent(
                     navigationType = navigationType,
                     preferredDisplayMode = preferredDisplayMode,
                     navController = navController,
                     selectedDestination = selectedDestination,
-                    railAndDrawerScrollState = null,
+                    railAndDrawerScrollState = railAndDrawerScrollState,
                     openDrawer = {},
                     navigateToDestination = navigationActions::navigateTo
                 )
@@ -171,7 +175,7 @@ fun VisyncAppContent(
                 navigateToDestination = navigateToDestination,
                 scrollState = railAndDrawerScrollState!!,
                 openDrawer = openDrawer,
-                showDestinationLabels = false
+                alwaysShowDestinationLabels = false
             )
         }
         Column(
@@ -190,7 +194,6 @@ fun VisyncAppContent(
                     navigateToDestination = navigateToDestination
                 )
             }
-
         }
     }
 }
