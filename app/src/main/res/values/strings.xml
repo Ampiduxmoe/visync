@@ -16,7 +16,7 @@
 
     <string name="tab_label_my_profile">Profile</string>
     <string name="tab_label_my_friends">Friends</string>
-    <string name="tab_label_rooms_manage">Manage rooms</string>
+    <string name="tab_label_rooms_manage">Rooms</string>
     <string name="tab_label_app_settings">Settings</string>
 
     <!--tab names are what top app bar should show-->
@@ -25,6 +25,6 @@
 
     <string name="tab_name_my_profile">My profile</string>
     <string name="tab_name_my_friends">My friends</string>
-    <string name="tab_name_rooms_manage">My Rooms</string>
+    <string name="tab_name_rooms_manage">Manage rooms</string>
     <string name="tab_name_app_settings">Settings</string>
 </resources>
