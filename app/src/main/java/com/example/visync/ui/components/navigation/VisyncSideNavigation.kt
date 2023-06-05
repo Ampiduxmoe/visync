@@ -324,28 +324,22 @@ fun CollapsableNavigationDrawer(
         permanentDrawerTransitionState = permanentDrawerTransitionState,
         railTransitionState = railTransitionState
     )
-
-    when (drawerState.value) {
-        PermanentDrawerVisibility.EXPANDED -> {
-            PermanentNavigationDrawer(
-                drawerContent = {
-                    PermanentNavigationDrawerContent(
-                        selectedDestination = selectedDestination,
-                        navigateToDestination = navigateToDestination,
-                        scrollState = scrollState,
-                        collapseIntoRail = {
-                            permanentDrawerTransitionState.value =
-                                PermanentDrawerVisibility.COLLAPSED
-                        },
-                        drawerSheetContentModifier = Modifier
-                            .width(permanentDrawerWidth),
-                        drawerSheetModifier = drawerSheetModifier
-                    )
+    PermanentNavigationDrawer(
+        drawerContent = {
+            PermanentNavigationDrawerContent(
+                selectedDestination = selectedDestination,
+                navigateToDestination = navigateToDestination,
+                scrollState = scrollState,
+                collapseIntoRail = {
+                    permanentDrawerTransitionState.value =
+                        PermanentDrawerVisibility.COLLAPSED
                 },
-                content = content
+                drawerSheetContentModifier = Modifier
+                    .width(permanentDrawerWidth),
+                drawerSheetModifier = drawerSheetModifier
             )
-        }
-        PermanentDrawerVisibility.COLLAPSED -> {
+        },
+        content = {
             Row(
                 modifier = Modifier.fillMaxSize()
             ) {
@@ -363,7 +357,7 @@ fun CollapsableNavigationDrawer(
                 content()
             }
         }
-    }
+    )
 }
 
 @Composable
@@ -419,29 +413,35 @@ private fun getDrawerAndRailAnimationModifiers(
         }
     }
 
-    val permanentDrawerIsInAnimation = !(
-        permanentDrawerTransition.targetState == PermanentDrawerVisibility.EXPANDED &&
-        permanentDrawerTransition.currentState == PermanentDrawerVisibility.EXPANDED &&
-        collapsableDrawerState.value == PermanentDrawerVisibility.EXPANDED
-    )
+    // animation ends when all states hold same value
+    val permanentDrawerIsInAnimation = setOf(
+        permanentDrawerTransition.targetState,
+        permanentDrawerTransition.currentState,
+        collapsableDrawerState.value
+    ).count() != 1
     val drawerSheetModifier = if (permanentDrawerIsInAnimation) {
         Modifier.overflowHiddenForDrawer(
             clipWidth = drawerSheetWidth,
             minimumActualWidth = initialRailWidth
         )
+    } else if (collapsableDrawerState.value == PermanentDrawerVisibility.COLLAPSED) {
+        Modifier.width(0.dp)
     } else {
         Modifier
     }
 
-    val railIsInAnimation = !(
-        railTransition.targetState == PermanentDrawerVisibility.COLLAPSED &&
-        railTransition.currentState == PermanentDrawerVisibility.COLLAPSED &&
-        collapsableDrawerState.value == PermanentDrawerVisibility.COLLAPSED
-    )
+    // animation ends when all states hold same value
+    val railIsInAnimation = setOf(
+        railTransition.targetState,
+        railTransition.currentState,
+        collapsableDrawerState.value
+    ).count() != 1
     val railModifier = if (railIsInAnimation) {
         Modifier.overflowHiddenForRail(
             clipWidth = railWidth
         )
+    } else if (collapsableDrawerState.value == PermanentDrawerVisibility.EXPANDED) {
+        Modifier.width(0.dp)
     } else {
         Modifier
     }
