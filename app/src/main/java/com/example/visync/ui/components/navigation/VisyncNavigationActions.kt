@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -44,7 +45,15 @@ val ACCOUNT_RELATED_DESTINATIONS = listOf(
     Route.AppSettings
 )
 
-val ALL_DESTINATIONS = MAIN_DESTINATIONS + ACCOUNT_RELATED_DESTINATIONS
+val SPECIAL_DESTINATIONS = listOf(
+    Route.Player
+)
+
+val ALL_DESTINATIONS = listOf(
+    MAIN_DESTINATIONS,
+    ACCOUNT_RELATED_DESTINATIONS,
+    SPECIAL_DESTINATIONS,
+).flatten()
 
 sealed class Route(
     val routeString: String,
@@ -57,6 +66,12 @@ sealed class Route(
     } else {
         icon.imageVector
     }!!
+
+    object Player : Route(
+        routeString = "player",
+        icon = RouteIcon(Icons.Outlined.PlayArrow),
+        actionDescriptionId = R.string.tab_label_player
+    )
 
     object Playlists : Route(
         routeString = "playlists",

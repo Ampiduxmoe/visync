@@ -29,7 +29,7 @@ class FakeVideofilesRepository : VideofilesRepository {
     override val videofiles: StateFlow<List<Videofile>> = _videofiles
 
     override fun getVideofile(id: Long): Videofile? {
-        return _videofiles.value.firstOrNull() { it.id == id }
+        return _videofiles.value.firstOrNull { it.id == id }
     }
 
     override fun tryAddVideofile(videofile: Videofile): Boolean {
@@ -38,5 +38,17 @@ class FakeVideofilesRepository : VideofilesRepository {
         }
         _videofiles.value = _videofiles.value + videofile
         return true
+    }
+
+    override fun tryAddVideofiles(videofiles: List<Videofile>): Int {
+        var videofilesAdded = 0
+        for (videofile in videofiles) {
+            videofilesAdded += if (tryAddVideofile((videofile))) 1 else 0
+        }
+        return videofilesAdded
+    }
+
+    override fun removeAllVideofiles() {
+        _videofiles.value = listOf()
     }
 }

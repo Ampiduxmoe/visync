@@ -9,4 +9,8 @@ interface VideofilesRepository {
     fun getVideofile(id: Long): Videofile?
 
     fun tryAddVideofile(videofile: Videofile): Boolean
+
+    fun tryAddVideofiles(videofiles: List<Videofile>): Int
+
+    fun removeAllVideofiles()
 }

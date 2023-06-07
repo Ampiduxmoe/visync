@@ -1,14 +1,19 @@
 package com.example.visync.ui
 
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
@@ -18,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,13 +32,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.data.videofiles.Videofile
 import com.example.visync.ui.components.navigation.CollapsableNavigationDrawer
+import com.example.visync.ui.components.navigation.CollapsableNavigationDrawerContent
 import com.example.visync.ui.components.navigation.ModalNavigationDrawerContent
-import com.example.visync.ui.components.navigation.PermanentDrawerVisibility
+import com.example.visync.ui.components.navigation.CollapsableDrawerState
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.VisyncBottomNavigationBar
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.components.navigation.VisyncNavigationRail
+import com.example.visync.ui.screens.PlayerScreen
+import com.example.visync.ui.screens.PlayerScreenViewModel
 import com.example.visync.ui.screens.PlaylistsScreen
 import com.example.visync.ui.screens.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.RoomsScreen
@@ -41,13 +51,18 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun VisyncApp(
-    windowSize: WindowSizeClass
+    windowSize: WindowSizeClass,
 ) {
     val navigationType: NavigationType
     val preferredDisplayMode: ContentDisplayMode
 
     Log.i("WindowSize", "widthSizeClass=${windowSize.widthSizeClass}")
     Log.i("WindowSize", "heightSizeClass=${windowSize.heightSizeClass}")
+
+    val visyncAppViewModel = hiltViewModel<VisyncAppViewModel>()
+    val visyncAppUiState by visyncAppViewModel
+        .uiState.collectAsStateWithLifecycle()
+
     when (windowSize.widthSizeClass) {
         WindowWidthSizeClass.Compact -> {
             navigationType = NavigationType.BOTTOM_NAVBAR_AND_DRAWER
@@ -58,7 +73,7 @@ fun VisyncApp(
             preferredDisplayMode = ContentDisplayMode.SINGLE_COLUMN
         }
         WindowWidthSizeClass.Expanded -> {
-            navigationType = NavigationType.PERMANENT_DRAWER
+            navigationType = NavigationType.CUSTOM_PERMANENT_DRAWER
             preferredDisplayMode = ContentDisplayMode.DUAL_COLUMN
         }
         else -> {
@@ -70,14 +85,19 @@ fun VisyncApp(
     VisyncNavigationWrapper(
         navigationType = navigationType,
         preferredDisplayMode = preferredDisplayMode,
+        visyncAppUiState = visyncAppUiState,
+        hideAllNavigation = visyncAppViewModel::hideNavigation,
+        showNavigation = visyncAppViewModel::showNavigation,
     )
 }
-
 
 @Composable
 fun VisyncNavigationWrapper(
     navigationType: NavigationType,
-    preferredDisplayMode: ContentDisplayMode
+    preferredDisplayMode: ContentDisplayMode,
+    visyncAppUiState: VisyncAppUiState,
+    hideAllNavigation: () -> Unit,
+    showNavigation: () -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -106,7 +126,7 @@ fun VisyncNavigationWrapper(
                             }
                         },
                         scrollState = railAndDrawerScrollState,
-                        showMainDestinations = true,
+                        showMainDestinations = navigationType == NavigationType.RAIL_AND_DRAWER,
                         closeDrawer = {
                             scope.launch {
                                 drawerState.close()
@@ -114,11 +134,15 @@ fun VisyncNavigationWrapper(
                         }
                     )
                 },
-                drawerState = drawerState
+                drawerState = drawerState,
+                gesturesEnabled = visyncAppUiState.showNavigation
             ) {
-                VisyncAppContent(
+                VisyncAppContent.ForModalDrawer(
                     navigationType = navigationType,
                     preferredDisplayMode = preferredDisplayMode,
+                    visyncAppUiState = visyncAppUiState,
+                    hideAllNavigation = hideAllNavigation,
+                    showNavigation = showNavigation,
                     navController = navController,
                     selectedDestination = selectedDestination,
                     railAndDrawerScrollState = railAndDrawerScrollState,
@@ -131,67 +155,38 @@ fun VisyncNavigationWrapper(
                 )
             }
         }
-        NavigationType.PERMANENT_DRAWER -> {
+        NavigationType.CUSTOM_PERMANENT_DRAWER -> {
             val collapsableDrawerState = remember {
-                mutableStateOf(PermanentDrawerVisibility.EXPANDED)
+                mutableStateOf(CollapsableDrawerState.EXPANDED)
             }
             CollapsableNavigationDrawer(
-                selectedDestination = selectedDestination,
-                navigateToDestination = navigationActions::navigateTo,
-                scrollState = rememberScrollState(),
-                drawerState = collapsableDrawerState,
+                drawerContent = {
+                    AnimatedVisibility(
+                        visible = visyncAppUiState.showNavigation,
+                        enter = expandHorizontally { 0 }
+                                + fadeIn(initialAlpha = 0f),
+                        exit = shrinkHorizontally { 0 }
+                                + fadeOut(targetAlpha = 0f)
+                    ) {
+                        CollapsableNavigationDrawerContent(
+                            selectedDestination = selectedDestination,
+                            navigateToDestination = navigationActions::navigateTo,
+                            scrollState = rememberScrollState(),
+                            drawerState = collapsableDrawerState,
+                        )
+                    }
+                }
             ) {
-                VisyncAppContent(
+                VisyncAppContent.ForCustomPermanentDrawer(
                     navigationType = navigationType,
                     preferredDisplayMode = preferredDisplayMode,
+                    visyncAppUiState = visyncAppUiState,
+                    hideAllNavigation = hideAllNavigation,
+                    showNavigation = showNavigation,
                     navController = navController,
                     selectedDestination = selectedDestination,
                     railAndDrawerScrollState = railAndDrawerScrollState,
-                    openDrawer = {},
-                    navigateToDestination = navigationActions::navigateTo
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun VisyncAppContent(
-    navigationType: NavigationType,
-    preferredDisplayMode: ContentDisplayMode,
-    navController: NavHostController,
-    selectedDestination: String,
-    railAndDrawerScrollState: ScrollState?,
-    openDrawer: () -> Unit,
-    navigateToDestination: (Route) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
-        if (navigationType == NavigationType.RAIL_AND_DRAWER) {
-            VisyncNavigationRail(
-                selectedDestination = selectedDestination,
-                navigateToDestination = navigateToDestination,
-                scrollState = railAndDrawerScrollState!!,
-                openDrawer = openDrawer,
-                alwaysShowDestinationLabels = false
-            )
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.inverseOnSurface)
-        ) {
-            VisyncNavHost(
-                navController = navController,
-                modifier = Modifier.weight(1f),
-                openDrawer = openDrawer
-            )
-            if (navigationType == NavigationType.BOTTOM_NAVBAR_AND_DRAWER) {
-                VisyncBottomNavigationBar(
-                    selectedDestination = selectedDestination,
-                    navigateToDestination = navigateToDestination
+                    navigateToDestination = navigationActions::navigateTo,
                 )
             }
         }
@@ -200,15 +195,41 @@ fun VisyncAppContent(
 
 @Composable
 fun VisyncNavHost(
+    preferredDisplayMode: ContentDisplayMode,
+    visyncAppUiState: VisyncAppUiState,
+    hideAllNavigation: () -> Unit,
+    showNavigation: () -> Unit,
     navController: NavHostController,
     openDrawer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val playerScreenViewModel = hiltViewModel<PlayerScreenViewModel>()
+    val playVideofiles: (List<Videofile>) -> Unit = { videofiles ->
+        playerScreenViewModel.setVideofilesToPlay(videofiles)
+        hideAllNavigation()
+        navController.navigate(Route.Player.routeString)
+    }
+    val closePlayer: () -> Unit = {
+        val currentRoute = navController.currentBackStackEntry?.destination?.route
+        if (currentRoute != Route.Player.routeString) {
+            throw Exception("closePlayer was called when there is no player shown")
+        }
+        showNavigation()
+        navController.navigateUp()
+    }
     NavHost(
         navController = navController,
         startDestination = Route.Playlists.routeString,
         modifier = modifier,
     ) {
+        composable(Route.Player.routeString) {
+            val playerScreenUiState by playerScreenViewModel
+                .uiState.collectAsStateWithLifecycle()
+            PlayerScreen(
+                playerScreenUiState = playerScreenUiState,
+                closePlayer = closePlayer
+            )
+        }
         composable(Route.Playlists.routeString) {
             val playlistsScreenViewModel = hiltViewModel<PlaylistsScreenViewModel>()
             val playlistsUiState by playlistsScreenViewModel
@@ -217,7 +238,8 @@ fun VisyncNavHost(
                 playlistsUiState = playlistsUiState,
                 openPlaylist = { playlistsScreenViewModel.setSelectedPlaylist(it.id) },
                 closePlaylist = { playlistsScreenViewModel.closeDetailScreen() },
-                openDrawer = openDrawer
+                openDrawer = openDrawer,
+                playVideofiles = playVideofiles
             )
         }
         composable(Route.RoomsJoin.routeString) {
@@ -229,30 +251,170 @@ fun VisyncNavHost(
             )
         }
         composable(Route.MyProfile.routeString) {
-            Column() {
+            Column {
 
             }
         }
         composable(Route.Friends.routeString) {
-            Column() {
+            Column {
 
             }
         }
         composable(Route.RoomsManage.routeString) {
-            Column() {
+            Column {
 
             }
         }
         composable(Route.AppSettings.routeString) {
-            Column() {
+            Column {
 
             }
         }
     }
 }
 
+private object VisyncAppContent {
+    @Composable
+    fun ForModalDrawer(
+        navigationType: NavigationType,
+        preferredDisplayMode: ContentDisplayMode,
+        visyncAppUiState: VisyncAppUiState,
+        hideAllNavigation: () -> Unit,
+        showNavigation: () -> Unit,
+        navController: NavHostController,
+        selectedDestination: String,
+        railAndDrawerScrollState: ScrollState?,
+        openDrawer: () -> Unit,
+        navigateToDestination: (Route) -> Unit,
+    ) {
+        UniversalContent(
+            navigationType = navigationType,
+            preferredDisplayMode = preferredDisplayMode,
+            visyncAppUiState = visyncAppUiState,
+            hideAllNavigation = hideAllNavigation,
+            showNavigation = showNavigation,
+            navController = navController,
+            selectedDestination = selectedDestination,
+            railAndDrawerScrollState = railAndDrawerScrollState,
+            openDrawer = openDrawer,
+            navigateToDestination = navigateToDestination,
+        )
+    }
+
+    @Composable
+    fun ForCustomPermanentDrawer(
+        navigationType: NavigationType,
+        preferredDisplayMode: ContentDisplayMode,
+        visyncAppUiState: VisyncAppUiState,
+        hideAllNavigation: () -> Unit,
+        showNavigation: () -> Unit,
+        navController: NavHostController,
+        selectedDestination: String,
+        railAndDrawerScrollState: ScrollState?,
+        navigateToDestination: (Route) -> Unit,
+    ) {
+        UniversalContent(
+            navigationType = navigationType,
+            preferredDisplayMode = preferredDisplayMode,
+            visyncAppUiState = visyncAppUiState,
+            hideAllNavigation = hideAllNavigation,
+            showNavigation = showNavigation,
+            navController = navController,
+            selectedDestination = selectedDestination,
+            railAndDrawerScrollState = railAndDrawerScrollState,
+            openDrawer = {},
+            navigateToDestination = navigateToDestination,
+        )
+    }
+
+    @Composable
+    private fun UniversalContent(
+        navigationType: NavigationType,
+        preferredDisplayMode: ContentDisplayMode,
+        visyncAppUiState: VisyncAppUiState,
+        hideAllNavigation: () -> Unit,
+        showNavigation: () -> Unit,
+        navController: NavHostController,
+        selectedDestination: String,
+        railAndDrawerScrollState: ScrollState?,
+        openDrawer: () -> Unit,
+        navigateToDestination: (Route) -> Unit,
+    ) {
+        when (navigationType) {
+            NavigationType.RAIL_AND_DRAWER -> {
+                Row(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    AnimatedVisibility(
+                        visible = visyncAppUiState.showNavigation,
+                        enter = expandHorizontally { 0 }
+                                + fadeIn(initialAlpha = 0f),
+                        exit = shrinkHorizontally { 0 }
+                                + fadeOut(targetAlpha = 0f)
+                    ) {
+                        VisyncNavigationRail(
+                            selectedDestination = selectedDestination,
+                            navigateToDestination = navigateToDestination,
+                            scrollState = railAndDrawerScrollState!!,
+                            openDrawer = openDrawer,
+                            alwaysShowDestinationLabels = false
+                        )
+                    }
+                    VisyncNavHost(
+                        navController = navController,
+                        preferredDisplayMode = preferredDisplayMode,
+                        visyncAppUiState = visyncAppUiState,
+                        hideAllNavigation = hideAllNavigation,
+                        showNavigation = showNavigation,
+                        openDrawer = openDrawer,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            NavigationType.BOTTOM_NAVBAR_AND_DRAWER -> {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    VisyncNavHost(
+                        navController = navController,
+                        preferredDisplayMode = preferredDisplayMode,
+                        visyncAppUiState = visyncAppUiState,
+                        hideAllNavigation = hideAllNavigation,
+                        showNavigation = showNavigation,
+                        openDrawer = openDrawer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    AnimatedVisibility(
+                        visible = visyncAppUiState.showNavigation,
+                        enter = expandVertically(expandFrom = Alignment.Top) { 0 }
+                                + fadeIn(initialAlpha = 0f),
+                        exit = shrinkVertically(shrinkTowards = Alignment.Top) { 0 }
+                                + fadeOut(targetAlpha = 0f)
+                    ) {
+                        VisyncBottomNavigationBar(
+                            selectedDestination = selectedDestination,
+                            navigateToDestination = navigateToDestination
+                        )
+                    }
+                }
+            }
+            NavigationType.CUSTOM_PERMANENT_DRAWER -> {
+                VisyncNavHost(
+                    navController = navController,
+                    preferredDisplayMode = preferredDisplayMode,
+                    visyncAppUiState = visyncAppUiState,
+                    hideAllNavigation = hideAllNavigation,
+                    showNavigation = showNavigation,
+                    openDrawer = openDrawer,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
+}
+
 enum class NavigationType {
-    BOTTOM_NAVBAR_AND_DRAWER, RAIL_AND_DRAWER, PERMANENT_DRAWER
+    BOTTOM_NAVBAR_AND_DRAWER, RAIL_AND_DRAWER, CUSTOM_PERMANENT_DRAWER
 }
 
 enum class ContentDisplayMode {

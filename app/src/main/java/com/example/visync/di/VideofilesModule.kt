@@ -10,6 +10,7 @@ import dagger.hilt.components.SingletonComponent
 @Module
 @InstallIn(SingletonComponent::class)
 object VideofilesModule {
+    
     @Provides
     fun provideVideofilesRepository(): VideofilesRepository {
         return FakeVideofilesRepository()

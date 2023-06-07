@@ -1,6 +1,8 @@
 package com.example.visync.ui.components.navigation
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.core.animateDp
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -8,8 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Alignment.Companion.CenterHorizontally
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -66,8 +69,8 @@ fun ModalNavigationDrawerContent(
             navigateToDestination = navigateToDestination,
             scrollState = scrollState,
             showCloseDrawerButton = true,
+            closeDrawerButtonClick = closeDrawer,
             showMainDestinations = showMainDestinations,
-            closeDrawer = closeDrawer,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -78,8 +81,11 @@ fun PermanentNavigationDrawerContent(
     selectedDestination: String,
     navigateToDestination: (Route) -> Unit,
     scrollState: ScrollState,
-    collapseIntoRail: () -> Unit,
+    showCloseDrawerButton: Boolean,
+    closeDrawerButtonClick: () -> Unit,
+    @SuppressLint("ModifierParameter")
     drawerSheetModifier: Modifier = Modifier,
+    @SuppressLint("ModifierParameter")
     drawerSheetContentModifier: Modifier = Modifier,
 ) {
 
@@ -90,9 +96,9 @@ fun PermanentNavigationDrawerContent(
             selectedDestination = selectedDestination,
             navigateToDestination = navigateToDestination,
             scrollState = scrollState,
-            showCloseDrawerButton = true,
+            showCloseDrawerButton = showCloseDrawerButton,
+            closeDrawerButtonClick = closeDrawerButtonClick,
             showMainDestinations = true,
-            closeDrawer = collapseIntoRail,
             modifier = drawerSheetContentModifier
         )
     }
@@ -105,8 +111,8 @@ private fun DrawerSheetContent(
     navigateToDestination: (Route) -> Unit,
     scrollState: ScrollState,
     showCloseDrawerButton: Boolean,
+    closeDrawerButtonClick: () -> Unit,
     showMainDestinations: Boolean,
-    closeDrawer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -126,7 +132,7 @@ private fun DrawerSheetContent(
                 color = MaterialTheme.colorScheme.primary
             )
             if (showCloseDrawerButton) {
-                IconButton(onClick = closeDrawer) {
+                IconButton(onClick = closeDrawerButtonClick) {
                     Icon(
                         imageVector = Icons.Filled.Menu,
                         contentDescription = stringResource(id = R.string.desc_navigation_drawer)
@@ -306,67 +312,79 @@ private fun VisyncNavigationRailItem(
  */
 @Composable
 fun CollapsableNavigationDrawer(
+    drawerContent: @Composable () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    PermanentNavigationDrawer(
+        drawerContent = drawerContent,
+        content = content
+    )
+}
+
+@Composable
+fun CollapsableNavigationDrawerContent(
     selectedDestination: String,
     navigateToDestination: (Route) -> Unit,
     scrollState: ScrollState,
-    drawerState: MutableState<PermanentDrawerVisibility>,
+    drawerState: MutableState<CollapsableDrawerState>,
     permanentDrawerWidth: Dp = 256.dp,
     railWidth: Dp = 80.dp,
-    content: @Composable () -> Unit,
 ) {
-
     val permanentDrawerTransitionState = remember { mutableStateOf(drawerState.value) }
     val railTransitionState = remember { mutableStateOf(drawerState.value) }
     val (drawerSheetModifier, railModifier) = getDrawerAndRailAnimationModifiers(
+        CollapsableDrawerPermanentDrawerAnimation.SLIDE,
+        CollapsableDrawerRailAnimation.FADE,
         collapsableDrawerState = drawerState,
         initialDrawerWidth = permanentDrawerWidth,
         initialRailWidth = railWidth,
         permanentDrawerTransitionState = permanentDrawerTransitionState,
         railTransitionState = railTransitionState
     )
-    PermanentNavigationDrawer(
-        drawerContent = {
-            PermanentNavigationDrawerContent(
-                selectedDestination = selectedDestination,
-                navigateToDestination = navigateToDestination,
-                scrollState = scrollState,
-                collapseIntoRail = {
-                    permanentDrawerTransitionState.value =
-                        PermanentDrawerVisibility.COLLAPSED
-                },
-                drawerSheetContentModifier = Modifier
-                    .width(permanentDrawerWidth),
-                drawerSheetModifier = drawerSheetModifier
-            )
+    PermanentNavigationDrawerContent(
+        selectedDestination = selectedDestination,
+        navigateToDestination = navigateToDestination,
+        scrollState = scrollState,
+        showCloseDrawerButton = true,
+        closeDrawerButtonClick = {
+            permanentDrawerTransitionState.value =
+                CollapsableDrawerState.COLLAPSED
         },
-        content = {
-            Row(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                VisyncNavigationRail(
-                    selectedDestination = selectedDestination,
-                    navigateToDestination = navigateToDestination,
-                    scrollState = scrollState,
-                    openDrawer = {
-                        railTransitionState.value =
-                            PermanentDrawerVisibility.EXPANDED
-                    },
-                    alwaysShowDestinationLabels = false,
-                    modifier = railModifier
-                )
-                content()
-            }
-        }
+        drawerSheetContentModifier = Modifier
+            .width(permanentDrawerWidth),
+        drawerSheetModifier = drawerSheetModifier
+    )
+    VisyncNavigationRail(
+        selectedDestination = selectedDestination,
+        navigateToDestination = navigateToDestination,
+        scrollState = scrollState,
+        openDrawer = {
+            railTransitionState.value =
+                CollapsableDrawerState.EXPANDED
+        },
+        alwaysShowDestinationLabels = false,
+        modifier = railModifier
     )
 }
 
+/*
+    TODO:
+        check if there is a better way of chaining animations so
+        instead of linking two transitions to each other
+        and constructing hacky modifiers
+        we can rewrite this in a concise way.
+ */
 @Composable
 private fun getDrawerAndRailAnimationModifiers(
-    collapsableDrawerState: MutableState<PermanentDrawerVisibility>,
+    @Suppress("SameParameterValue")
+    collapsableDrawerPermanentDrawerAnimation: CollapsableDrawerPermanentDrawerAnimation,
+    @Suppress("SameParameterValue")
+    collapsableDrawerRailAnimation: CollapsableDrawerRailAnimation,
+    collapsableDrawerState: MutableState<CollapsableDrawerState>,
     initialDrawerWidth: Dp,
     initialRailWidth: Dp,
-    permanentDrawerTransitionState: MutableState<PermanentDrawerVisibility>,
-    railTransitionState: MutableState<PermanentDrawerVisibility>
+    permanentDrawerTransitionState: MutableState<CollapsableDrawerState>,
+    railTransitionState: MutableState<CollapsableDrawerState>,
 ): Pair<Modifier, Modifier> {
 
     val permanentDrawerTransition = updateTransition(
@@ -399,8 +417,8 @@ private fun getDrawerAndRailAnimationModifiers(
         label = "Drawer sheet width",
     ) { state ->
         when (state) {
-            PermanentDrawerVisibility.COLLAPSED -> 0.dp
-            PermanentDrawerVisibility.EXPANDED -> initialDrawerWidth
+            CollapsableDrawerState.COLLAPSED -> 0.dp
+            CollapsableDrawerState.EXPANDED -> initialDrawerWidth
         }
     }
 
@@ -408,8 +426,16 @@ private fun getDrawerAndRailAnimationModifiers(
         label = "Rail width",
     ) { state ->
         when (state) {
-            PermanentDrawerVisibility.COLLAPSED -> initialRailWidth
-            PermanentDrawerVisibility.EXPANDED -> 0.dp
+            CollapsableDrawerState.COLLAPSED -> initialRailWidth
+            CollapsableDrawerState.EXPANDED -> 0.dp
+        }
+    }
+    val railAlpha by railTransition.animateFloat(
+        label = "Rail alpha"
+    ) { state ->
+        when (state) {
+            CollapsableDrawerState.COLLAPSED -> 1f
+            CollapsableDrawerState.EXPANDED -> 0f
         }
     }
 
@@ -420,11 +446,20 @@ private fun getDrawerAndRailAnimationModifiers(
         collapsableDrawerState.value
     ).count() != 1
     val drawerSheetModifier = if (permanentDrawerIsInAnimation) {
-        Modifier.overflowHiddenForDrawer(
-            clipWidth = drawerSheetWidth,
-            minimumActualWidth = initialRailWidth
-        )
-    } else if (collapsableDrawerState.value == PermanentDrawerVisibility.COLLAPSED) {
+        when (collapsableDrawerPermanentDrawerAnimation) {
+            CollapsableDrawerPermanentDrawerAnimation.CLIP ->
+                Modifier.overflowHiddenForDrawer(
+                    clipWidth = drawerSheetWidth,
+                    minimumActualWidth = initialRailWidth
+                )
+            CollapsableDrawerPermanentDrawerAnimation.SLIDE ->
+                Modifier.slideInAndOutForDrawer(
+                    clipWidth = drawerSheetWidth,
+                    minimumActualWidth = initialRailWidth,
+                    maximumActualWidth = initialDrawerWidth
+                )
+        }
+    } else if (collapsableDrawerState.value == CollapsableDrawerState.COLLAPSED) {
         Modifier.width(0.dp)
     } else {
         Modifier
@@ -437,10 +472,17 @@ private fun getDrawerAndRailAnimationModifiers(
         collapsableDrawerState.value
     ).count() != 1
     val railModifier = if (railIsInAnimation) {
-        Modifier.overflowHiddenForRail(
-            clipWidth = railWidth
-        )
-    } else if (collapsableDrawerState.value == PermanentDrawerVisibility.EXPANDED) {
+        when (collapsableDrawerRailAnimation) {
+            CollapsableDrawerRailAnimation.CLIP ->
+                Modifier.overflowHiddenForRail(
+                    clipWidth = railWidth
+                )
+            CollapsableDrawerRailAnimation.FADE ->
+                Modifier.fadeInAndOutForRail(
+                    alpha = railAlpha
+                )
+        }
+    } else if (collapsableDrawerState.value == CollapsableDrawerState.EXPANDED) {
         Modifier.width(0.dp)
     } else {
         Modifier
@@ -458,7 +500,7 @@ private fun getDrawerAndRailAnimationModifiers(
  */
 private fun Modifier.overflowHiddenForDrawer(
     clipWidth: Dp,
-    minimumActualWidth: Dp
+    minimumActualWidth: Dp,
 ): Modifier = this.composed {
     val pxClipValue = with(LocalDensity.current) { clipWidth.toPx() }
     this.width(max(clipWidth, minimumActualWidth))
@@ -468,6 +510,16 @@ private fun Modifier.overflowHiddenForDrawer(
                 this@drawWithContent.drawContent()
             }
         }
+}
+
+private fun Modifier.slideInAndOutForDrawer(
+    clipWidth: Dp,
+    minimumActualWidth: Dp,
+    maximumActualWidth: Dp,
+): Modifier = this.composed {
+    this.width(max(clipWidth, minimumActualWidth))
+        .horizontalScroll(remember{ ScrollState(0) }, false)
+        .offset(x = clipWidth - maximumActualWidth)
 }
 
 private fun Modifier.overflowHiddenForRail(
@@ -481,6 +533,20 @@ private fun Modifier.overflowHiddenForRail(
     }
 }
 
-enum class PermanentDrawerVisibility {
+private fun Modifier.fadeInAndOutForRail(
+    alpha: Float,
+): Modifier {
+    return alpha(alpha)
+}
+
+enum class CollapsableDrawerState {
     EXPANDED, COLLAPSED
+}
+
+private enum class CollapsableDrawerRailAnimation {
+    CLIP, FADE
+}
+
+private enum class CollapsableDrawerPermanentDrawerAnimation {
+    CLIP, SLIDE
 }

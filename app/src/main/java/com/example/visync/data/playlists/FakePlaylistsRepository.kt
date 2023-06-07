@@ -23,7 +23,7 @@ class FakePlaylistsRepository : PlaylistsRepository {
     override val playlists: StateFlow<List<Playlist>> = _playlists
 
     override fun getPlaylist(id: Long): Playlist? {
-        return _playlists.value.firstOrNull() { it.id == id }
+        return _playlists.value.firstOrNull { it.id == id }
     }
 
     override fun tryAddPlaylist(playlist: Playlist): Boolean {

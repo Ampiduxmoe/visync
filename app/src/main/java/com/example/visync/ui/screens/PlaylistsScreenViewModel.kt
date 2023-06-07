@@ -25,6 +25,7 @@ class PlaylistsScreenViewModel @Inject constructor(
     private var _playlistToVideoFiles: Map<Playlist, List<Videofile>> = emptyMap()
 
     private var _playlistOrdering = PlaylistOrdering.ID_ASC
+    private val alwaysApplyCorrectOrder = true
 
     init {
         observePlaylists()
@@ -37,7 +38,7 @@ class PlaylistsScreenViewModel @Inject constructor(
                 updatePlaylistsMap(
                     playlists = playlists,
                     videofiles = videofilesRepository.videofiles.value,
-                    applyCorrectOrdering = true,
+                    applyCorrectOrdering = alwaysApplyCorrectOrder,
                 )
                 refreshPlaylistsContent()
             }
@@ -50,7 +51,7 @@ class PlaylistsScreenViewModel @Inject constructor(
                 updatePlaylistsMap(
                     playlists = playlistsRepository.playlists.value,
                     videofiles = videofiles,
-                    applyCorrectOrdering = true,
+                    applyCorrectOrdering = alwaysApplyCorrectOrder,
                 )
                 refreshPlaylistsContent()
             }
@@ -60,6 +61,7 @@ class PlaylistsScreenViewModel @Inject constructor(
     private fun updatePlaylistsMap(
         playlists: List<Playlist>,
         videofiles: List<Videofile>,
+        @Suppress("SameParameterValue")
         applyCorrectOrdering: Boolean,
     ) {
         _playlistToVideoFiles = mapPlaylistsToVideofiles(
@@ -85,14 +87,18 @@ class PlaylistsScreenViewModel @Inject constructor(
     }
 
 
-    private fun playlistsOrdered(playlists: List<Playlist>): List<Playlist> {
+    private fun playlistsOrdered(
+        playlists: List<Playlist>
+    ): List<Playlist> {
         val comparator = getCurrentPlaylistComparator<Playlist>()
         // since we should guarantee correct type from corresponding function, suppress
         @Suppress("UNCHECKED_CAST")
         return playlists.sortedWith(comparator as Comparator<in Playlist>)
     }
 
-    private fun playlistsWithVideofilesOrdered(playlists: List<PlaylistWithVideofiles>): List<PlaylistWithVideofiles> {
+    private fun playlistsWithVideofilesOrdered(
+        playlists: List<PlaylistWithVideofiles>
+    ): List<PlaylistWithVideofiles> {
         val comparator = getCurrentPlaylistComparator<PlaylistWithVideofiles>()
         // since we should guarantee correct type from corresponding function, suppress
         @Suppress("UNCHECKED_CAST")
@@ -182,3 +188,6 @@ data class PlaylistsUiState(
 enum class PlaylistOrdering {
     ID_ASC, NAME_ASC
 }
+
+// TODO: use SavedStateHandle everywhere to restore state properly
+private val SELECTED_PLAYLIST_ID_KEY = "selectedPlaylistId"

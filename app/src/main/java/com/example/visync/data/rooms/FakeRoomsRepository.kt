@@ -23,7 +23,7 @@ class FakeRoomsRepository : RoomsRepository {
     override val rooms: StateFlow<List<Room>> = _rooms
 
     override fun getRoom(id: Long): Room? {
-        return _rooms.value.firstOrNull() { it.id == id }
+        return _rooms.value.firstOrNull { it.id == id }
     }
 
     override fun tryAddRoom(room: Room): Boolean {
