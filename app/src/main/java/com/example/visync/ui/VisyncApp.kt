@@ -1,7 +1,10 @@
 package com.example.visync.ui
 
 import android.util.Log
+import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -11,7 +14,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -25,14 +30,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.ui.PlayerView
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.visync.data.videofiles.Videofile
 import com.example.visync.ui.components.navigation.CollapsableNavigationDrawer
 import com.example.visync.ui.components.navigation.CollapsableNavigationDrawerContent
 import com.example.visync.ui.components.navigation.ModalNavigationDrawerContent
@@ -161,13 +168,7 @@ fun VisyncNavigationWrapper(
             }
             CollapsableNavigationDrawer(
                 drawerContent = {
-                    AnimatedVisibility(
-                        visible = visyncAppUiState.showNavigation,
-                        enter = expandHorizontally { 0 }
-                                + fadeIn(initialAlpha = 0f),
-                        exit = shrinkHorizontally { 0 }
-                                + fadeOut(targetAlpha = 0f)
-                    ) {
+                    if (visyncAppUiState.showNavigation) {
                         CollapsableNavigationDrawerContent(
                             selectedDestination = selectedDestination,
                             navigateToDestination = navigationActions::navigateTo,
@@ -196,7 +197,6 @@ fun VisyncNavigationWrapper(
 @Composable
 fun VisyncNavHost(
     preferredDisplayMode: ContentDisplayMode,
-    visyncAppUiState: VisyncAppUiState,
     hideAllNavigation: () -> Unit,
     showNavigation: () -> Unit,
     navController: NavHostController,
@@ -204,11 +204,6 @@ fun VisyncNavHost(
     modifier: Modifier = Modifier,
 ) {
     val playerScreenViewModel = hiltViewModel<PlayerScreenViewModel>()
-    val playVideofiles: (List<Videofile>) -> Unit = { videofiles ->
-        playerScreenViewModel.setVideofilesToPlay(videofiles)
-        hideAllNavigation()
-        navController.navigate(Route.Player.routeString)
-    }
     val closePlayer: () -> Unit = {
         val currentRoute = navController.currentBackStackEntry?.destination?.route
         if (currentRoute != Route.Player.routeString) {
@@ -217,32 +212,92 @@ fun VisyncNavHost(
         showNavigation()
         navController.navigateUp()
     }
+
+    /*
+        TODO:
+            Fix UI jumping for a couple of frames.
+            Navigation to and from player is janky
+            because it consists of removing navigation + navigating.
+            Nested navigation might be needed for this.
+     */
+    val noEnterTransitionFromPlayer: (
+    AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition?
+    ) = {
+        if (initialState.destination.route == Route.Player.routeString) {
+            EnterTransition.None
+        } else {
+            null
+        }
+    }
+    val noExitTransitionToPlayer: (
+        AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition?
+    ) = {
+        if (targetState.destination.route == Route.Player.routeString) {
+            ExitTransition.None
+        } else {
+            null
+        }
+    }
     NavHost(
         navController = navController,
         startDestination = Route.Playlists.routeString,
         modifier = modifier,
     ) {
-        composable(Route.Player.routeString) {
+        composable(
+            Route.Player.routeString,
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None }
+        ) {
             val playerScreenUiState by playerScreenViewModel
                 .uiState.collectAsStateWithLifecycle()
             PlayerScreen(
                 playerScreenUiState = playerScreenUiState,
                 closePlayer = closePlayer
-            )
+            ) {
+                AndroidView(
+                    factory = { context ->
+                        PlayerView(context).also {
+                            it.player = playerScreenViewModel.getPlayer()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16 / 9f)
+                )
+            }
         }
-        composable(Route.Playlists.routeString) {
+        composable(
+            Route.Playlists.routeString,
+            enterTransition = noEnterTransitionFromPlayer,
+            exitTransition = noExitTransitionToPlayer
+        ) {
             val playlistsScreenViewModel = hiltViewModel<PlaylistsScreenViewModel>()
             val playlistsUiState by playlistsScreenViewModel
                 .uiState.collectAsStateWithLifecycle()
             PlaylistsScreen(
+                preferredDisplayMode = preferredDisplayMode,
                 playlistsUiState = playlistsUiState,
                 openPlaylist = { playlistsScreenViewModel.setSelectedPlaylist(it.id) },
-                closePlaylist = { playlistsScreenViewModel.closeDetailScreen() },
-                openDrawer = openDrawer,
-                playVideofiles = playVideofiles
+                closePlaylist = playlistsScreenViewModel::closeDetailScreen,
+                addVideoToPlaylistFromUri = playlistsScreenViewModel::addVideoToPlaylistFromUri,
+                playVideofile = { videofile ->
+                    playerScreenViewModel.setVideofilesToPlay(
+                        videoFilesToPlay = playlistsUiState.playlists.find { playlistWithVideofiles ->
+                            playlistWithVideofiles.playlist.id == videofile.playlistId
+                        }?.videofiles ?: listOf(),
+                        startFrom = videofile
+                    )
+                    hideAllNavigation()
+                    navController.navigate(Route.Player.routeString)
+                },
+                openDrawer = openDrawer
             )
         }
-        composable(Route.RoomsJoin.routeString) {
+        composable(
+            Route.RoomsJoin.routeString,
+            enterTransition = noEnterTransitionFromPlayer,
+            exitTransition = noExitTransitionToPlayer
+        ) {
             val roomsScreenViewModel = hiltViewModel<RoomsScreenViewModel>()
             val roomsUiState by roomsScreenViewModel
                 .uiState.collectAsStateWithLifecycle()
@@ -347,9 +402,9 @@ private object VisyncAppContent {
                 ) {
                     AnimatedVisibility(
                         visible = visyncAppUiState.showNavigation,
-                        enter = expandHorizontally { 0 }
+                        enter = expandHorizontally(expandFrom = Alignment.End) { 0 }
                                 + fadeIn(initialAlpha = 0f),
-                        exit = shrinkHorizontally { 0 }
+                        exit = shrinkHorizontally(shrinkTowards = Alignment.End) { 0 }
                                 + fadeOut(targetAlpha = 0f)
                     ) {
                         VisyncNavigationRail(
@@ -363,7 +418,6 @@ private object VisyncAppContent {
                     VisyncNavHost(
                         navController = navController,
                         preferredDisplayMode = preferredDisplayMode,
-                        visyncAppUiState = visyncAppUiState,
                         hideAllNavigation = hideAllNavigation,
                         showNavigation = showNavigation,
                         openDrawer = openDrawer,
@@ -378,7 +432,6 @@ private object VisyncAppContent {
                     VisyncNavHost(
                         navController = navController,
                         preferredDisplayMode = preferredDisplayMode,
-                        visyncAppUiState = visyncAppUiState,
                         hideAllNavigation = hideAllNavigation,
                         showNavigation = showNavigation,
                         openDrawer = openDrawer,
@@ -402,7 +455,6 @@ private object VisyncAppContent {
                 VisyncNavHost(
                     navController = navController,
                     preferredDisplayMode = preferredDisplayMode,
-                    visyncAppUiState = visyncAppUiState,
                     hideAllNavigation = hideAllNavigation,
                     showNavigation = showNavigation,
                     openDrawer = openDrawer,

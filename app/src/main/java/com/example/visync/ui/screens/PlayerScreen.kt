@@ -15,6 +15,7 @@ import com.example.visync.R
 fun PlayerScreen(
     playerScreenUiState: PlayerScreenUiState,
     closePlayer: () -> Unit,
+    player: @Composable () -> Unit,
 ) {
     val videofilesToPlay = playerScreenUiState.videofilesToMediaItems
     BackHandler {
@@ -27,7 +28,17 @@ fun PlayerScreen(
                 contentDescription = stringResource(R.string.desc_back)
             )
         }
-        Text("hello im a player")
-        Text("now playing ${videofilesToPlay.keys.first().filename}")
+        val filename = videofilesToPlay
+            .keys
+            .firstOrNull()
+            ?.filename
+        if (filename == null) {
+            Text("hello im a player")
+            Text("can't play anything right now")
+            Text("it may be because of a bug or you just chose a dummy video")
+            return
+        }
+        Text("now playing $filename")
+        player()
     }
 }

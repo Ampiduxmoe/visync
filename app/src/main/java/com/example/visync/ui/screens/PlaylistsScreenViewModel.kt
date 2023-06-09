@@ -1,7 +1,9 @@
 package com.example.visync.ui.screens
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.visync.data.files.VideoMetadataReader
 import com.example.visync.data.playlists.Playlist
 import com.example.visync.data.playlists.PlaylistWithVideofiles
 import com.example.visync.data.playlists.PlaylistsRepository
@@ -17,6 +19,7 @@ import javax.inject.Inject
 class PlaylistsScreenViewModel @Inject constructor(
     private val playlistsRepository: PlaylistsRepository,
     private val videofilesRepository: VideofilesRepository,
+    private val videoMetadataReader: VideoMetadataReader,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlaylistsUiState(loading = true))
@@ -162,6 +165,19 @@ class PlaylistsScreenViewModel @Inject constructor(
         )
     }
 
+    fun addVideoToPlaylistFromUri(playlist: Playlist, uri: Uri) {
+        videofilesRepository.tryAddVideofile(
+            Videofile(
+                id = videofilesRepository.videofiles.value.maxOf { it.id } + 1,
+                uri = uri,
+                filename = videoMetadataReader
+                    .getMetadataFromUri(uri)
+                    ?.filename
+                    ?: "unknown filename",
+                playlistId = playlist.id
+            )
+        )
+    }
 
     fun setSelectedPlaylist(playlistId: Long) {
         val playlist = uiState.value.playlists.find { it.playlist.id == playlistId }

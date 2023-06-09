@@ -4,6 +4,7 @@
     <!--description strings for actions/buttons/etc-->
     <string name="desc_navigation_drawer">Navigation Drawer</string>
     <string name="desc_back">Back</string>
+    <string name="desc_add_video_to_playlist">Add video to the playlist</string>
 
     <!--this us random string for experimenting-->
     <string name="navigation_drawer_fab">Navigation Drawer Button</string>

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.visync.data.playlists.Playlist
@@ -15,15 +16,17 @@ import com.example.visync.data.playlists.PlaylistWithVideofiles
 @Composable
 fun PlaylistItem(
     playlistWithVideofiles: PlaylistWithVideofiles,
-    openPlaylist: (Playlist) -> Unit,
+    onClick: (Playlist) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val playlist = playlistWithVideofiles.playlist
     val videofiles = playlistWithVideofiles.videofiles
     Column(
-        modifier = Modifier
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
             .fillMaxWidth()
             .padding(4.dp)
-            .clickable { openPlaylist(playlist) }
+            .clickable { onClick(playlist) }
     ) {
         Text(
             text = playlist.name,

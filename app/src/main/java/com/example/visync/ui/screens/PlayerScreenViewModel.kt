@@ -1,5 +1,6 @@
 package com.example.visync.ui.screens
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -29,15 +30,29 @@ class PlayerScreenViewModel @Inject constructor(
         return MediaItem.fromUri(videofile.uri)
     }
 
-    fun setVideofilesToPlay(videoFilesToPlay: List<Videofile>) {
+    fun setVideofilesToPlay(
+        videoFilesToPlay: List<Videofile>,
+        startFrom: Videofile,
+    ) {
         _uiState.value = _uiState.value.copy(
             videofilesToMediaItems = videoFilesToPlay
+                .filter { it.uri != Uri.EMPTY }
                 .associateWith(::videofileToMediaItem)
-                .also {
-                    player.setMediaItems(it.values.toList())
+                .also { videofilesToMediaItems ->
+                    player.setMediaItems(
+                        /* mediaItems = */ videofilesToMediaItems.values.toList(),
+                        /* startIndex = */ maxOf(
+                            videoFilesToPlay
+                                .filter { it -> it.uri != Uri.EMPTY }
+                                .indexOf(startFrom), 
+                            0),
+                        /* startPositionMs = */ 0
+                    )
                 }
         )
     }
+
+    fun getPlayer() = player
 }
 
 data class PlayerScreenUiState(
