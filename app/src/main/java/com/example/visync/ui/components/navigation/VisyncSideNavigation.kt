@@ -141,7 +141,7 @@ private fun DrawerSheetContent(
         }
 
         if (showMainDestinations) {
-            MAIN_DESTINATIONS.forEach { mainDestination ->
+            CONNECTION_MODE_DESTINATIONS.forEach { mainDestination ->
                 VisyncNavigationDrawerItem(
                     destination = mainDestination,
                     isSelected = selectedDestination == mainDestination.routeString,
@@ -240,7 +240,7 @@ fun VisyncNavigationRail(
                 // 10.dp for pixel-perfect alignment with drawers
                 modifier = Modifier.padding(vertical = 10.dp),
             )
-            MAIN_DESTINATIONS.forEach { accountDestination ->
+            CONNECTION_MODE_DESTINATIONS.forEach { accountDestination ->
                 VisyncNavigationRailItem(
                     destination = accountDestination,
                     isSelected = selectedDestination == accountDestination.routeString,

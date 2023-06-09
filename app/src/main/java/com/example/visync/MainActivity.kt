@@ -7,7 +7,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import com.example.visync.ui.theme.VisyncTheme
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
-import com.example.visync.ui.VisyncApp
+import com.example.visync.ui.AppWrapper
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -18,7 +18,7 @@ class MainActivity : ComponentActivity() {
             VisyncTheme {
                 val windowSize = calculateWindowSizeClass(this)
 
-                VisyncApp(
+                AppWrapper(
                     windowSize = windowSize
                 )
             }

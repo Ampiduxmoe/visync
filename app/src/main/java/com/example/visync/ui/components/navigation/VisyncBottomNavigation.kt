@@ -15,7 +15,7 @@ fun VisyncBottomNavigationBar(
     navigateToDestination: (Route) -> Unit,
 ) {
     NavigationBar(modifier = Modifier.fillMaxWidth()) {
-        MAIN_DESTINATIONS.forEach { mainDestination ->
+        CONNECTION_MODE_DESTINATIONS.forEach { mainDestination ->
             NavigationBarItem(
                 selected = selectedDestination == mainDestination.routeString,
                 onClick = { navigateToDestination(mainDestination) },

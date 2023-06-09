@@ -6,7 +6,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
@@ -14,10 +13,10 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import com.example.visync.R
 
-class VisyncNavigationActions(private val navController: NavHostController) {
+class AppNavigationActions(private val navController: NavHostController) {
 
-    fun navigateTo(destination: Route) {
-        navController.navigate(destination.routeString) {
+    fun navigateTo(destination: String) {
+        navController.navigate(destination) {
             // Pop up to the start destination of the graph to
             // avoid building up a large stack of destinations
             // on the back stack as users select items
@@ -33,11 +32,26 @@ class VisyncNavigationActions(private val navController: NavHostController) {
     }
 }
 
-val MAIN_DESTINATIONS = listOf(
+val TOP_LEVEL_DESTINATIONS = listOf(
+    TopLevelRoute.Player,
+    TopLevelRoute.MainApp
+)
+
+/**
+ *  Destinations indicating whether user will be
+ *  hosting video playback to a room themselves or
+ *  join existing room with someone who already started hosting.
+ */
+val CONNECTION_MODE_DESTINATIONS = listOf(
     Route.Playlists,
     Route.RoomsJoin
 )
 
+/**
+ *  Destinations for managing your account:
+ *  your profile, friends, rooms you are part of,
+ *  or just app settings.
+ */
 val ACCOUNT_RELATED_DESTINATIONS = listOf(
     Route.MyProfile,
     Route.Friends,
@@ -45,15 +59,21 @@ val ACCOUNT_RELATED_DESTINATIONS = listOf(
     Route.AppSettings
 )
 
-val SPECIAL_DESTINATIONS = listOf(
-    Route.Player
-)
-
-val ALL_DESTINATIONS = listOf(
-    MAIN_DESTINATIONS,
+val MAIN_APP_DESTINATIONS = listOf(
+    CONNECTION_MODE_DESTINATIONS,
     ACCOUNT_RELATED_DESTINATIONS,
-    SPECIAL_DESTINATIONS,
 ).flatten()
+
+sealed class TopLevelRoute(
+    val routeString: String,
+) {
+    object MainApp : TopLevelRoute(
+        routeString = "mainApp"
+    )
+    object Player : TopLevelRoute(
+        routeString = "player"
+    )
+}
 
 sealed class Route(
     val routeString: String,
@@ -66,12 +86,6 @@ sealed class Route(
     } else {
         icon.imageVector
     }!!
-
-    object Player : Route(
-        routeString = "player",
-        icon = RouteIcon(Icons.Outlined.PlayArrow),
-        actionDescriptionId = R.string.tab_label_player
-    )
 
     object Playlists : Route(
         routeString = "playlists",

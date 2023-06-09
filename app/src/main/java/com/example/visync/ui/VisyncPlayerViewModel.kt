@@ -18,6 +18,7 @@ class PlayerScreenViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         PlayerScreenUiState(
             videofilesToMediaItems = mapOf(),
+            selectedVideofile = null
         )
     )
     val uiState: StateFlow<PlayerScreenUiState> = _uiState
@@ -31,24 +32,22 @@ class PlayerScreenViewModel @Inject constructor(
     }
 
     fun setVideofilesToPlay(
-        videoFilesToPlay: List<Videofile>,
-        startFrom: Videofile,
+        videofilesToPlay: List<Videofile>,
+        startFrom: Int,
     ) {
+        val selectedVideofile = videofilesToPlay[startFrom]
+        val noDummyVideofiles = videofilesToPlay.filter { it.uri != Uri.EMPTY }
         _uiState.value = _uiState.value.copy(
-            videofilesToMediaItems = videoFilesToPlay
-                .filter { it.uri != Uri.EMPTY }
+            videofilesToMediaItems = noDummyVideofiles
                 .associateWith(::videofileToMediaItem)
                 .also { videofilesToMediaItems ->
                     player.setMediaItems(
                         /* mediaItems = */ videofilesToMediaItems.values.toList(),
-                        /* startIndex = */ maxOf(
-                            videoFilesToPlay
-                                .filter { it -> it.uri != Uri.EMPTY }
-                                .indexOf(startFrom), 
-                            0),
+                        /* startIndex = */ maxOf(noDummyVideofiles.indexOf(selectedVideofile),0),
                         /* startPositionMs = */ 0
                     )
-                }
+                },
+            selectedVideofile = selectedVideofile
         )
     }
 
@@ -57,4 +56,5 @@ class PlayerScreenViewModel @Inject constructor(
 
 data class PlayerScreenUiState(
     val videofilesToMediaItems: Map<Videofile, MediaItem>,
+    val selectedVideofile: Videofile?,
 )

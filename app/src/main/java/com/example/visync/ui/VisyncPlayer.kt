@@ -1,44 +1,50 @@
 package com.example.visync.ui.screens
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.example.visync.R
 
 @Composable
-fun PlayerScreen(
-    playerScreenUiState: PlayerScreenUiState,
+fun VisyncPlayer(
+    visyncPlayerUiState: PlayerScreenUiState,
     closePlayer: () -> Unit,
     player: @Composable () -> Unit,
 ) {
-    val videofilesToPlay = playerScreenUiState.videofilesToMediaItems
     BackHandler {
         closePlayer()
     }
-    Column {
+    Column(
+        Modifier.verticalScroll(rememberScrollState())
+    ) {
         IconButton(onClick = closePlayer) {
             Icon(
                 imageVector = Icons.Filled.ArrowBack,
                 contentDescription = stringResource(R.string.desc_back)
             )
         }
-        val filename = videofilesToPlay
-            .keys
-            .firstOrNull()
-            ?.filename
-        if (filename == null) {
-            Text("hello im a player")
+        Text("hello im a player")
+        val selectedVideofile = visyncPlayerUiState.selectedVideofile
+        if (selectedVideofile == null) {
             Text("can't play anything right now")
-            Text("it may be because of a bug or you just chose a dummy video")
+            Text("there is no selectedVideofile")
             return
         }
-        Text("now playing $filename")
+        if (selectedVideofile.uri == Uri.EMPTY) {
+            Text("you selected dummy videofile (${selectedVideofile.filename})")
+            return
+        }
+        Text("now playing ${selectedVideofile.filename}")
         player()
     }
 }

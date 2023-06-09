@@ -7,16 +7,16 @@ import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 
 @HiltViewModel
-class VisyncAppViewModel @Inject constructor(
+class MainAppViewModel @Inject constructor(
 
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        VisyncAppUiState(
-            showNavigation = true,
+        MainAppUiState(
+            isNavigationVisible = true,
         )
     )
-    val uiState: StateFlow<VisyncAppUiState> = _uiState
+    val uiState: StateFlow<MainAppUiState> = _uiState
 
     init {
 
@@ -24,17 +24,17 @@ class VisyncAppViewModel @Inject constructor(
 
     fun hideNavigation() {
         _uiState.value = _uiState.value.copy(
-            showNavigation = false,
+            isNavigationVisible = false,
         )
     }
 
     fun showNavigation() {
         _uiState.value = _uiState.value.copy(
-            showNavigation = true,
+            isNavigationVisible = true,
         )
     }
 }
 
-data class VisyncAppUiState(
-    val showNavigation: Boolean,
+data class MainAppUiState(
+    val isNavigationVisible: Boolean,
 )
