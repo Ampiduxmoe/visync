@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import com.example.visync.R
 
@@ -502,7 +503,7 @@ private fun Modifier.overflowHiddenForDrawer(
     minimumActualWidth: Dp,
 ): Modifier = this.composed {
     val pxClipValue = with(LocalDensity.current) { clipWidth.toPx() }
-    this.width(maxOf(clipWidth, minimumActualWidth))
+    this.width(clipWidth.coerceAtLeast(minimumActualWidth))
         .horizontalScroll(ScrollState(0))
         .drawWithContent {
             clipRect(right = pxClipValue) {
@@ -516,7 +517,7 @@ private fun Modifier.slideInAndOutForDrawer(
     minimumActualWidth: Dp,
     maximumActualWidth: Dp,
 ): Modifier = this.composed {
-    this.width(maxOf(clipWidth, minimumActualWidth))
+    this.width(clipWidth.coerceAtLeast(minimumActualWidth))
         .horizontalScroll(remember{ ScrollState(0) }, false)
         .offset(x = clipWidth - maximumActualWidth)
 }
