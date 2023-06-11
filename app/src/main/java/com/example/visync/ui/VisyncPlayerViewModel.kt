@@ -52,6 +52,11 @@ class PlayerScreenViewModel @Inject constructor(
     }
 
     fun getPlayer() = player
+
+    override fun onCleared() {
+        super.onCleared()
+        player.release()
+    }
 }
 
 data class PlayerScreenUiState(
