@@ -61,7 +61,7 @@ fun ModalNavigationDrawerContent(
     navigateToDestination: (Route) -> Unit,
     scrollState: ScrollState,
     showMainDestinations: Boolean,
-    closeDrawer: () -> Unit = {},
+    closeDrawer: () -> Unit,
 ) {
     ModalDrawerSheet {
         DrawerSheetContent(
