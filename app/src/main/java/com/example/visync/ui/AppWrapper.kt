@@ -16,8 +16,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.visync.ui.components.navigation.AppNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
-import com.example.visync.ui.screens.PlayerScreenViewModel
-import com.example.visync.ui.screens.VisyncPlayer
 
 @Composable
 fun AppWrapper(
@@ -32,7 +30,7 @@ fun AppWrapper(
     val mainAppUiState by mainAppViewModel
         .uiState.collectAsStateWithLifecycle()
 
-    val visyncPlayerViewModel = hiltViewModel<PlayerScreenViewModel>()
+    val visyncPlayerViewModel = hiltViewModel<VisyncPlayerViewModel>()
     val visyncPlayerUiState by visyncPlayerViewModel
         .uiState.collectAsStateWithLifecycle()
 

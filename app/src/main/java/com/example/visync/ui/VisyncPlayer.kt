@@ -1,4 +1,4 @@
-package com.example.visync.ui.screens
+package com.example.visync.ui
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -28,7 +28,7 @@ import com.example.visync.R
 
 @Composable
 fun VisyncPlayer(
-    visyncPlayerUiState: PlayerScreenUiState,
+    visyncPlayerUiState: VisyncPlayerUiState,
     closePlayer: () -> Unit,
     player: Player,
 ) {

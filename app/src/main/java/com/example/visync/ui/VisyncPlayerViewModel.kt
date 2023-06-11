@@ -1,4 +1,4 @@
-package com.example.visync.ui.screens
+package com.example.visync.ui
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -11,17 +11,17 @@ import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 
 @HiltViewModel
-class PlayerScreenViewModel @Inject constructor(
+class VisyncPlayerViewModel @Inject constructor(
     private val player: Player
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
-        PlayerScreenUiState(
+        VisyncPlayerUiState(
             videofilesToMediaItems = mapOf(),
             selectedVideofile = null
         )
     )
-    val uiState: StateFlow<PlayerScreenUiState> = _uiState
+    val uiState: StateFlow<VisyncPlayerUiState> = _uiState
 
     init {
         player.prepare()
@@ -59,7 +59,7 @@ class PlayerScreenViewModel @Inject constructor(
     }
 }
 
-data class PlayerScreenUiState(
+data class VisyncPlayerUiState(
     val videofilesToMediaItems: Map<Videofile, MediaItem>,
     val selectedVideofile: Videofile?,
 )
