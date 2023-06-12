@@ -87,6 +87,20 @@ dependencies {
 }
 
 hilt {
+/**
+    This option was enabled as a second try to fix following warning:
+    |   The following options were not recognized by any processor:
+    |   '[
+    |       dagger.fastInit,
+    |       dagger.hilt.android.internal.disableAndroidSuperclassValidation,
+    |       dagger.hilt.android.internal.projectType,
+    |       dagger.hilt.internal.useAggregatingRootProcessor,
+    |       kapt.kotlin.generated
+    |   ]'
+
+    But this warning still pops up every other build.
+    TODO: find fix
+ */
     enableAggregatingTask true
 }
 
