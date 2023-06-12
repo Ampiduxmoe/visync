@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +25,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
@@ -71,7 +75,7 @@ fun VisyncPlayerOverlay(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
+        modifier = modifier.background(Brush.linearGradient(listOf(Color.White, Color.White)), shape = RectangleShape, alpha = 0.5f)
     ) {
         IconButton(onClick = closePlayer) {
             Icon(
@@ -94,6 +98,13 @@ fun VisyncPlayerOverlay(
         Text("pause", modifier = Modifier.clickable { playbackControls.pause() })
         Text("unpause", modifier = Modifier.clickable { playbackControls.unpause() })
         Text("next", modifier = Modifier.clickable { playbackControls.seekToNext() })
+        Text("current speed = ${playbackState.playbackSpeed}")
+        Text("0.2x speed", modifier = Modifier.clickable { playbackControls.setPlaybackSpeed(0.2f) })
+        Text("1.0x speed", modifier = Modifier.clickable { playbackControls.setPlaybackSpeed(1f) })
+        Text("2.0x speed", modifier = Modifier.clickable { playbackControls.setPlaybackSpeed(2.0f) })
+        Text("repeat mode = ${playbackState.repeatMode}")
+        Text("toggle repeat mode", modifier = Modifier.clickable { playbackControls.toggleRepeatMode() })
+        Text("duration is ${playbackState.currentVideoDuration/1000}")
         Text("current time is ${playbackState.currentPosition/1000}")
         Text(
             "to ${(playbackState.currentPosition-5000)/1000}",
