@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
 import androidx.media3.common.VideoSize
 import com.example.visync.data.videofiles.Videofile
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -167,6 +168,7 @@ data class VisyncPlayerPlaybackState(
 interface VisyncPlayerPlaybackStateSetters {
     fun setCurrentMediaItem(mediaItem: MediaItem?)
     fun setCurrentMediaItem(mediaItem: MediaItem?, hasPrevious: Boolean, hasNext: Boolean)
+    fun setCurrentMediaItem(mediaItem: MediaItem?, currentPosition: Long, hasPrevious: Boolean, hasNext: Boolean)
     fun setPlayerState(playerState: @Player.State Int)
     fun setPlayWhenReady(playWhenReady: Boolean)
     fun setIsPlaying(isPlaying: Boolean)
@@ -183,6 +185,7 @@ interface VisyncPlayerPlaybackStateSetters {
 private fun buildPlaybackStateSetters(
     playbackState: MutableStateFlow<VisyncPlayerPlaybackState>
 ) = object : VisyncPlayerPlaybackStateSetters {
+
     override fun setCurrentMediaItem(mediaItem: MediaItem?) {
         playbackState.value = playbackState.value.copy(
             currentMediaItem = mediaItem
@@ -195,6 +198,19 @@ private fun buildPlaybackStateSetters(
     ) {
         playbackState.value = playbackState.value.copy(
             currentMediaItem = mediaItem,
+            hasPrevious = hasPrevious,
+            hasNext = hasNext
+        )
+    }
+    override fun setCurrentMediaItem(
+        mediaItem: MediaItem?,
+        currentPosition: Long,
+        hasPrevious: Boolean,
+        hasNext: Boolean
+    ) {
+        playbackState.value = playbackState.value.copy(
+            currentMediaItem = mediaItem,
+            currentPosition = currentPosition,
             hasPrevious = hasPrevious,
             hasNext = hasNext
         )
@@ -281,11 +297,22 @@ private fun buildVisyncPlayerEventListener(
     onIsPlayingChanged: (Boolean) -> Unit = {},
 ): Player.Listener {
     return object : Player.Listener {
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             Log.d("VisyncPlayerListener", "mediaItem.mediaId=${mediaItem?.mediaId}")
+            Log.d("VisyncPlayerListener", "MediaItemTransitionReason=${reason}")
             Log.d("VisyncPlayerListener", "player.hasPrev=${player.hasPreviousMediaItem()}")
             Log.d("VisyncPlayerListener", "player.hasNext=${player.hasNextMediaItem()}")
             uiStateSetters.setSelectedVideofileByMediaItem(mediaItem)
+            if (reason == MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
+                playbackStateSetters.setCurrentMediaItem(
+                    mediaItem = mediaItem,
+                    currentPosition = player.currentPosition,
+                    hasPrevious = player.hasPreviousMediaItem(),
+                    hasNext = player.hasNextMediaItem()
+                )
+                return
+            }
             playbackStateSetters.setCurrentMediaItem(
                 mediaItem = mediaItem,
                 hasPrevious = player.hasPreviousMediaItem(),
