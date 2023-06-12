@@ -2,11 +2,9 @@ package com.example.visync.ui
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -25,18 +23,42 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.example.visync.R
+import com.example.visync.data.videofiles.Videofile
 
 @Composable
 fun VisyncPlayer(
-    visyncPlayerUiState: VisyncPlayerUiState,
+    playerUiState: VisyncPlayerUiState,
+    playerPlaybackState: VisyncPlayerPlaybackState,
+    playerPlaybackControls: VisyncPlayerPlaybackControls,
     closePlayer: () -> Unit,
     player: Player,
 ) {
     BackHandler {
         closePlayer()
     }
+    ExoPlayerComposable(
+        player = player,
+        modifier = Modifier.fillMaxSize()
+    )
+    VisyncPlayerOverlay(
+        selectedVideofile = playerUiState.selectedVideofile,
+        playbackState = playerPlaybackState,
+        playbackControls = playerPlaybackControls,
+        closePlayer = closePlayer,
+        modifier = Modifier.fillMaxSize()
+    )
+}
+
+@Composable
+fun VisyncPlayerOverlay(
+    selectedVideofile: Videofile?,
+    playbackState: VisyncPlayerPlaybackState,
+    playbackControls: VisyncPlayerPlaybackControls,
+    closePlayer: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Column(
-        Modifier.verticalScroll(rememberScrollState())
+        modifier = modifier
     ) {
         IconButton(onClick = closePlayer) {
             Icon(
@@ -45,7 +67,6 @@ fun VisyncPlayer(
             )
         }
         Text("hello im a player")
-        val selectedVideofile = visyncPlayerUiState.selectedVideofile
         if (selectedVideofile == null) {
             Text("can't play anything right now")
             Text("there is no selectedVideofile")
@@ -56,23 +77,38 @@ fun VisyncPlayer(
             return
         }
         Text("now playing ${selectedVideofile.filename}")
-        ExoPlayerComposable(
-            player = player
+        Text("prev", modifier = Modifier.clickable { playbackControls.seekToPrevious() })
+        Text("pause", modifier = Modifier.clickable { playbackControls.pause() })
+        Text("unpause", modifier = Modifier.clickable { playbackControls.unpause() })
+        Text("next", modifier = Modifier.clickable { playbackControls.seekToNext() })
+        Text("current time is ${playbackState.currentPosition/1000}")
+        Text(
+            "to ${(playbackState.currentPosition-5000)/1000}",
+            modifier = Modifier.clickable {
+                playbackControls.seekTo(playbackState.currentPosition-5000)
+            }
+        )
+        Text(
+            "to ${(playbackState.currentPosition+5000)/1000}",
+            modifier = Modifier.clickable {
+                playbackControls.seekTo(playbackState.currentPosition+5000)
+            }
         )
     }
 }
 
 @Composable
 fun ExoPlayerComposable(
-    player: Player
+    player: Player,
+    modifier: Modifier = Modifier,
 ) {
-    val lifecycle = remember {
+    val lifecycleState = remember {
         mutableStateOf(Lifecycle.Event.ON_CREATE)
     }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            lifecycle.value = event
+            lifecycleState.value = event
         }
         lifecycleOwner.lifecycle.addObserver(observer)
 
@@ -87,7 +123,7 @@ fun ExoPlayerComposable(
             }
         },
         update = {
-             when (lifecycle.value) {
+             when (lifecycleState.value) {
                  Lifecycle.Event.ON_STOP -> {
                      it.onPause()
                      it.player?.stop()
@@ -99,8 +135,6 @@ fun ExoPlayerComposable(
                  else -> Unit
              }
         },
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(16 / 16f)
+        modifier = modifier
     )
 }

@@ -33,6 +33,8 @@ fun AppWrapper(
     val visyncPlayerViewModel = hiltViewModel<VisyncPlayerViewModel>()
     val visyncPlayerUiState by visyncPlayerViewModel
         .uiState.collectAsStateWithLifecycle()
+    val visyncPLayerPlaybackState by visyncPlayerViewModel
+        .playbackState.collectAsStateWithLifecycle()
 
     /**
      *  How much time to give to composition process
@@ -71,7 +73,9 @@ fun AppWrapper(
             exitTransition = { ExitTransition.None }
         ) {
             VisyncPlayer(
-                visyncPlayerUiState = visyncPlayerUiState,
+                playerUiState = visyncPlayerUiState,
+                playerPlaybackState = visyncPLayerPlaybackState,
+                playerPlaybackControls = visyncPlayerViewModel.playbackControls,
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
                 },
