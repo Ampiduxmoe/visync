@@ -5,15 +5,21 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -93,6 +99,31 @@ fun VisyncPlayerOverlay(
             modifier = Modifier.clickable {
                 playbackControls.seekTo(playbackState.currentPosition+5000)
             }
+        )
+        var canPlayerChangeSliderValue by remember { mutableStateOf(true) }
+        var sliderValue by remember { mutableFloatStateOf(0f) }
+        LaunchedEffect(playbackState.currentPosition) {
+            if (canPlayerChangeSliderValue) {
+                val videoDuration = playbackState.currentVideoDuration.toFloat()
+                sliderValue = if (videoDuration == 0f) {
+                    0f
+                } else {
+                    playbackState.currentPosition / videoDuration
+                }
+            }
+        }
+        Slider(
+            value = sliderValue,
+            onValueChange = {
+                canPlayerChangeSliderValue = false
+                sliderValue = it
+                playbackControls.seekTo(it)
+            },
+            onValueChangeFinished = {
+                canPlayerChangeSliderValue = true
+            },
+            valueRange = 0f..1f,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }

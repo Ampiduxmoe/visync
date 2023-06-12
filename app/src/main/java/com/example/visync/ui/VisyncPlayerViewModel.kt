@@ -1,6 +1,8 @@
 package com.example.visync.ui
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
@@ -43,20 +45,37 @@ class VisyncPlayerViewModel @Inject constructor(
     )
     val playbackState: StateFlow<VisyncPlayerPlaybackState> = _playbackState
 
-    val playbackControls: VisyncPlayerPlaybackControls
+    val playbackControls = buildVisyncPlayerPlaybackControls(player, playbackState)
 
     private var isPlayerListenerAdded: Boolean = false
     private var removePlayerListener: () -> Unit
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val updateCurrentPositionTask = object : Runnable {
+        override fun run() {
+            _playbackState.value = playbackState.value.copy(
+                currentPosition = player.currentPosition
+            )
+            mainHandler.postDelayed(this, 1000)
+        }
+    }
 
     init {
         val eventListener = buildVisyncPlayerEventListener(
             player = player,
             uiStateSetters = buildUiStateSetters(_uiState),
-            playbackStateSetters = buildPlaybackStateSetters(_playbackState)
+            playbackStateSetters = buildPlaybackStateSetters(_playbackState),
+            onIsPlayingChanged = { isPlaying ->
+                if (isPlaying) {
+                    mainHandler.post(updateCurrentPositionTask)
+                } else {
+                    mainHandler.removeCallbacks(updateCurrentPositionTask)
+                }
+            }
         )
         setPlayerListener(eventListener)
         removePlayerListener = { player.removeListener(eventListener) }
-        playbackControls = buildVisyncPlayerPlaybackControls(player, playbackState)
+
         player.prepare()
     }
 
@@ -161,7 +180,6 @@ interface VisyncPlayerPlaybackStateSetters {
 private fun buildPlaybackStateSetters(
     playbackState: MutableStateFlow<VisyncPlayerPlaybackState>
 ) = object : VisyncPlayerPlaybackStateSetters {
-
     override fun setCurrentMediaItem(mediaItem: MediaItem?) {
         playbackState.value = playbackState.value.copy(
             currentMediaItem = mediaItem
@@ -251,6 +269,7 @@ private fun buildVisyncPlayerEventListener(
     player: Player,
     uiStateSetters: VisyncPlayerUiStateSetters,
     playbackStateSetters: VisyncPlayerPlaybackStateSetters,
+    onIsPlayingChanged: (Boolean) -> Unit = {},
 ): Player.Listener {
     return object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -276,6 +295,10 @@ private fun buildVisyncPlayerEventListener(
             Log.d("VisyncPlayerListener", "player.duration=${player.duration}")
             Log.d("VisyncPlayerListener", "player.currentPosition=${player.currentPosition}")
             playbackStateSetters.setDurationAndPosition(player.duration, player.currentPosition)
+        }
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            Log.d("VisyncPlayerListener", "isPlaying=$isPlaying")
+            onIsPlayingChanged(isPlaying)
         }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             Log.d("VisyncPlayerListener", "playWhenReady=$playWhenReady")
