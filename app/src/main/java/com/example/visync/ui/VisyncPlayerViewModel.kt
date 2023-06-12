@@ -33,6 +33,7 @@ class VisyncPlayerViewModel @Inject constructor(
             currentMediaItem = null,
             playerState = Player.STATE_IDLE,
             playWhenReady = false,
+            isPlaying = false,
             playbackSpeed = 1f,
             currentVideoDuration = 0,
             currentPosition = 0,
@@ -152,6 +153,7 @@ data class VisyncPlayerPlaybackState(
     val currentMediaItem: MediaItem?,
     val playerState: @Player.State Int,
     val playWhenReady: Boolean,
+    val isPlaying: Boolean,
     val playbackSpeed: Float,
     val currentVideoDuration: Long,
     val currentPosition: Long,
@@ -167,6 +169,7 @@ interface VisyncPlayerPlaybackStateSetters {
     fun setCurrentMediaItem(mediaItem: MediaItem?, hasPrevious: Boolean, hasNext: Boolean)
     fun setPlayerState(playerState: @Player.State Int)
     fun setPlayWhenReady(playWhenReady: Boolean)
+    fun setIsPlaying(isPlaying: Boolean)
     fun setPlaybackSpeed(playbackSpeed: Float)
     fun setCurrentVideoDuration(videoDuration: Long)
     fun setCurrentPosition(position: Long)
@@ -204,6 +207,11 @@ private fun buildPlaybackStateSetters(
     override fun setPlayWhenReady(playWhenReady: Boolean) {
         playbackState.value = playbackState.value.copy(
             playWhenReady = playWhenReady
+        )
+    }
+    override fun setIsPlaying(isPlaying: Boolean) {
+        playbackState.value = playbackState.value.copy(
+            isPlaying = isPlaying
         )
     }
     override fun setPlaybackSpeed(playbackSpeed: Float) {
@@ -297,13 +305,14 @@ private fun buildVisyncPlayerEventListener(
             Log.d("VisyncPlayerListener", "player.currentPosition=${player.currentPosition}")
             playbackStateSetters.setDurationAndPosition(player.duration, player.currentPosition)
         }
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            Log.d("VisyncPlayerListener", "isPlaying=$isPlaying")
-            onIsPlayingChanged(isPlaying)
-        }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             Log.d("VisyncPlayerListener", "playWhenReady=$playWhenReady")
             playbackStateSetters.setPlayWhenReady(playWhenReady)
+        }
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            Log.d("VisyncPlayerListener", "isPlaying=$isPlaying")
+            onIsPlayingChanged(isPlaying)
+            playbackStateSetters.setIsPlaying(isPlaying)
         }
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
             Log.d("VisyncPlayerListener", "playbackParameters.speed=${playbackParameters.speed}")

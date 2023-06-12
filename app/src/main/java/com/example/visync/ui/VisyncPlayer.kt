@@ -2,6 +2,9 @@ package com.example.visync.ui
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,9 +19,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -30,6 +33,7 @@ import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.example.visync.R
 import com.example.visync.data.videofiles.Videofile
+import kotlinx.coroutines.launch
 
 @Composable
 fun VisyncPlayer(
@@ -39,15 +43,18 @@ fun VisyncPlayer(
     closePlayer: () -> Unit,
     player: Player,
 ) {
+    val selectedVideofile = playerUiState.selectedVideofile
     BackHandler {
         closePlayer()
     }
-    ExoPlayerComposable(
-        player = player,
-        modifier = Modifier.fillMaxSize()
-    )
+    if (selectedVideofile != null && selectedVideofile.uri != Uri.EMPTY) {
+        ExoPlayerComposable(
+            player = player,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
     VisyncPlayerOverlay(
-        selectedVideofile = playerUiState.selectedVideofile,
+        selectedVideofile = selectedVideofile,
         playbackState = playerPlaybackState,
         playbackControls = playerPlaybackControls,
         closePlayer = closePlayer,
@@ -101,22 +108,40 @@ fun VisyncPlayerOverlay(
             }
         )
         var canPlayerChangeSliderValue by remember { mutableStateOf(true) }
-        var sliderValue by remember { mutableFloatStateOf(0f) }
+        val sliderValue = remember { Animatable(0f) }
         LaunchedEffect(playbackState.currentPosition) {
             if (canPlayerChangeSliderValue) {
                 val videoDuration = playbackState.currentVideoDuration.toFloat()
-                sliderValue = if (videoDuration == 0f) {
-                    0f
+                if (videoDuration == 0f) {
+                    sliderValue.snapTo(0f)
                 } else {
-                    playbackState.currentPosition / videoDuration
+                    val newSliderValue = playbackState.currentPosition / videoDuration
+                    val playbackSpeed = playbackState.playbackSpeed
+                    val oneSecondProgressIncrement = 1000 / videoDuration * playbackSpeed
+                    sliderValue.snapTo(newSliderValue)
+                    sliderValue.animateTo(
+                        targetValue = newSliderValue + oneSecondProgressIncrement,
+                        animationSpec = tween(
+                            durationMillis = 1000,
+                            easing = LinearEasing
+                        )
+                    )
                 }
             }
         }
+        LaunchedEffect(playbackState.isPlaying) {
+            if (!playbackState.isPlaying) {
+                sliderValue.stop()
+            }
+        }
+        val coroutineScope = rememberCoroutineScope()
         Slider(
-            value = sliderValue,
+            value = sliderValue.value,
             onValueChange = {
                 canPlayerChangeSliderValue = false
-                sliderValue = it
+                coroutineScope.launch {
+                    sliderValue.snapTo(it)
+                }
                 playbackControls.seekTo(it)
             },
             onValueChangeFinished = {
