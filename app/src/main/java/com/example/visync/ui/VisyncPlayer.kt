@@ -140,6 +140,22 @@ fun VisyncPlayerOverlay(
                 }
             }
         }
+        LaunchedEffect(playbackState.playbackSpeed) {
+            if (canPlayerChangeSliderValue && playbackState.isPlaying) {
+                val videoDuration = playbackState.currentVideoDuration.toFloat()
+                if (videoDuration != 0f) {
+                    val playbackSpeed = playbackState.playbackSpeed
+                    val oneSecondProgressIncrement = 1000 / videoDuration * playbackSpeed
+                    sliderValue.animateTo(
+                        targetValue = sliderValue.value + oneSecondProgressIncrement,
+                        animationSpec = tween(
+                            durationMillis = 1000,
+                            easing = LinearEasing
+                        )
+                    )
+                }
+            }
+        }
         LaunchedEffect(playbackState.isPlaying) {
             if (!playbackState.isPlaying) {
                 sliderValue.stop()
