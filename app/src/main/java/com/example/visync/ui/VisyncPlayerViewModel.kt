@@ -226,6 +226,7 @@ private fun buildPlaybackStateSetters(
         val isPositionChanged = playbackState.value.currentPosition != position
         if (isDurationChanged && isPositionChanged) {
             playbackState.value = playbackState.value.copy(
+                currentVideoDuration = videoDuration,
                 currentPosition = position
             )
             return
