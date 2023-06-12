@@ -338,8 +338,8 @@ private fun buildVisyncPlayerEventListener(
         }
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             Log.d("VisyncPlayerListener", "isPlaying=$isPlaying")
-            onIsPlayingChanged(isPlaying)
             playbackStateSetters.setIsPlaying(isPlaying)
+            onIsPlayingChanged(isPlaying)
         }
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
             Log.d("VisyncPlayerListener", "playbackParameters.speed=${playbackParameters.speed}")

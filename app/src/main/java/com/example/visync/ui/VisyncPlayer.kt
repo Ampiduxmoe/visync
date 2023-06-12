@@ -130,13 +130,15 @@ fun VisyncPlayerOverlay(
                     val playbackSpeed = playbackState.playbackSpeed
                     val oneSecondProgressIncrement = 1000 / videoDuration * playbackSpeed
                     sliderValue.snapTo(newSliderValue)
-                    sliderValue.animateTo(
-                        targetValue = newSliderValue + oneSecondProgressIncrement,
-                        animationSpec = tween(
-                            durationMillis = 1000,
-                            easing = LinearEasing
+                    if (playbackState.isPlaying) {
+                        sliderValue.animateTo(
+                            targetValue = newSliderValue + oneSecondProgressIncrement,
+                            animationSpec = tween(
+                                durationMillis = 1000,
+                                easing = LinearEasing
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
