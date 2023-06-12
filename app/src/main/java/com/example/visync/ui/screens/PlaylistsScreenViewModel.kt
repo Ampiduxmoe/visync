@@ -93,26 +93,19 @@ class PlaylistsScreenViewModel @Inject constructor(
     private fun playlistsOrdered(
         playlists: List<Playlist>
     ): List<Playlist> {
-        val comparator = getCurrentPlaylistComparator<Playlist>()
+        val comparator = getPlaylistComparator<Playlist>(_playlistOrdering)
         // since we should guarantee correct type from corresponding function, suppress
         @Suppress("UNCHECKED_CAST")
         return playlists.sortedWith(comparator as Comparator<in Playlist>)
     }
 
-    private fun playlistsWithVideofilesOrdered(
-        playlists: List<PlaylistWithVideofiles>
-    ): List<PlaylistWithVideofiles> {
-        val comparator = getCurrentPlaylistComparator<PlaylistWithVideofiles>()
-        // since we should guarantee correct type from corresponding function, suppress
-        @Suppress("UNCHECKED_CAST")
-        return playlists.sortedWith(comparator as Comparator<in PlaylistWithVideofiles>)
-    }
-
-    private inline fun <reified T>getCurrentPlaylistComparator(): Comparator<*> {
+    private inline fun <reified T>getPlaylistComparator(
+        playlistOrdering: PlaylistOrdering
+    ): Comparator<*> {
         when (T::class) {
             Playlist::class -> {
                 val currentComparison: (Playlist) -> Comparable<*> = {
-                    when (_playlistOrdering) {
+                    when (playlistOrdering) {
                         PlaylistOrdering.ID_ASC -> { it.id}
                         PlaylistOrdering.NAME_ASC -> { it.name}
                     }
@@ -121,7 +114,7 @@ class PlaylistsScreenViewModel @Inject constructor(
             }
             PlaylistWithVideofiles::class -> {
                 val currentComparison: (PlaylistWithVideofiles) -> Comparable<*> = {
-                    when (_playlistOrdering) {
+                    when (playlistOrdering) {
                         PlaylistOrdering.ID_ASC -> { it.playlist.id}
                         PlaylistOrdering.NAME_ASC -> { it.playlist.name}
                     }
