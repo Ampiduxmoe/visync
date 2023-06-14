@@ -38,6 +38,7 @@ class VisyncPlayerViewModel @Inject constructor(
             playbackSpeed = 1f,
             currentVideoDuration = 0,
             currentPosition = 0,
+            currentPositionPollingInterval = 1000,
             repeatMode = Player.REPEAT_MODE_OFF,
             hasPrevious = false,
             hasNext = false,
@@ -55,10 +56,11 @@ class VisyncPlayerViewModel @Inject constructor(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val updateCurrentPositionTask = object : Runnable {
         override fun run() {
-            _playbackState.value = playbackState.value.copy(
+            val pollingInterval = _playbackState.value.currentPositionPollingInterval
+            _playbackState.value = _playbackState.value.copy(
                 currentPosition = player.currentPosition
             )
-            mainHandler.postDelayed(this, 1000)
+            mainHandler.postDelayed(this, pollingInterval.toLong())
         }
     }
 
@@ -158,6 +160,7 @@ data class VisyncPlayerPlaybackState(
     val playbackSpeed: Float,
     val currentVideoDuration: Long,
     val currentPosition: Long,
+    val currentPositionPollingInterval: Int,
     val repeatMode: @Player.RepeatMode Int,
     val hasPrevious: Boolean,
     val hasNext: Boolean,
@@ -175,6 +178,7 @@ interface VisyncPlayerPlaybackStateSetters {
     fun setPlaybackSpeed(playbackSpeed: Float)
     fun setCurrentVideoDuration(videoDuration: Long)
     fun setCurrentPosition(position: Long)
+    fun setCurrentPositionPollingInterval(interval: Int)
     fun setDurationAndPosition(videoDuration: Long, position: Long)
     fun setHasPreviousAndNext(hasPrevious: Boolean, hasNext: Boolean)
     fun setRepeatMode(repeatMode: @Player.RepeatMode Int)
@@ -243,6 +247,11 @@ private fun buildPlaybackStateSetters(
     override fun setCurrentPosition(position: Long) {
         playbackState.value = playbackState.value.copy(
             currentPosition = position
+        )
+    }
+    override fun setCurrentPositionPollingInterval(interval: Int) {
+        playbackState.value = playbackState.value.copy(
+            currentPositionPollingInterval = interval
         )
     }
     override fun setDurationAndPosition(videoDuration: Long, position: Long) {
