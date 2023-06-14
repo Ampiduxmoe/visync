@@ -118,85 +118,96 @@ fun VisyncPlayerOverlay(
                 playbackControls.seekTo(playbackState.currentPosition+5000)
             }
         )
-        val sliderValue = remember { Animatable(0f) }
-        val coroutineScope = rememberCoroutineScope()
-        var canPlayerChangeSliderValue by remember { mutableStateOf(true) }
-        val animationDurationMultiplier = 1.25f
-        val oneSecondProgressIncrement = remember(
-            playbackState.currentVideoDuration,
-            playbackState.playbackSpeed
-        ) {
-            when (val videoDuration = playbackState.currentVideoDuration.toFloat()) {
-                0f -> 0f
-                else -> 1000 / videoDuration * playbackState.playbackSpeed
-            }
+        VisyncPlayerSlider(
+            currentVideoDuration = playbackState.currentVideoDuration,
+            currentPosition = playbackState.currentPosition,
+            currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
+            playbackSpeed = playbackState.playbackSpeed,
+            isPlaying = playbackState.isPlaying,
+            seekTo = playbackControls::seekTo,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+fun VisyncPlayerSlider(
+    currentVideoDuration: Long,
+    currentPosition: Long,
+    currentPositionPollingInterval: Int,
+    playbackSpeed: Float,
+    isPlaying: Boolean,
+    seekTo: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val sliderValue = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val animationDurationMultiplier = 1.25f
+    var canPlayerChangeSliderValue by remember { mutableStateOf(true) }
+    val oneSecondProgressIncrement = remember(currentVideoDuration, playbackSpeed) {
+        when (currentVideoDuration) {
+            0L -> 0f
+            else -> 1000f / currentVideoDuration * playbackSpeed
         }
-        LaunchedEffect(playbackState.currentPosition) {
-            if (!canPlayerChangeSliderValue) {
-                return@LaunchedEffect
-            }
-            val videoDuration = playbackState.currentVideoDuration.toFloat()
-            if (videoDuration == 0f) {
-                sliderValue.snapTo(0f)
-                return@LaunchedEffect
-            }
-            val newSliderValue = playbackState.currentPosition / videoDuration
-            sliderValue.snapTo(newSliderValue)
-            if (playbackState.isPlaying) {
-                val sliderIncrement = oneSecondProgressIncrement * animationDurationMultiplier
-                val pollingInterval = playbackState.currentPositionPollingInterval
-                val animationDuration = (pollingInterval * animationDurationMultiplier).toInt()
-                sliderValue.animateTo(
-                    targetValue = newSliderValue + sliderIncrement,
-                    animationSpec = tween(
-                        durationMillis = animationDuration,
-                        easing = LinearEasing
-                    )
-                )
-            }
+    }
+    LaunchedEffect(currentPosition) {
+        if (!canPlayerChangeSliderValue) {
+            return@LaunchedEffect
         }
-        LaunchedEffect(
-            playbackState.isPlaying,
-            playbackState.playbackSpeed
-        ) {
-            if (!canPlayerChangeSliderValue) {
-                return@LaunchedEffect
-            }
-            if (!playbackState.isPlaying) {
-                sliderValue.stop()
-                return@LaunchedEffect
-            }
-            val videoDuration = playbackState.currentVideoDuration.toFloat()
-            if (videoDuration == 0f) {
-                return@LaunchedEffect
-            }
+        if (currentVideoDuration == 0L) {
+            sliderValue.snapTo(0f)
+            return@LaunchedEffect
+        }
+        val newSliderValue = currentPosition / currentVideoDuration.toFloat()
+        sliderValue.snapTo(newSliderValue)
+        if (isPlaying) {
             val sliderIncrement = oneSecondProgressIncrement * animationDurationMultiplier
-            val pollingInterval = playbackState.currentPositionPollingInterval
-            val animationDuration = (pollingInterval * animationDurationMultiplier).toInt()
+            val animationDuration = currentPositionPollingInterval * animationDurationMultiplier
             sliderValue.animateTo(
-                targetValue = sliderValue.value + sliderIncrement,
+                targetValue = newSliderValue + sliderIncrement,
                 animationSpec = tween(
-                    durationMillis = animationDuration,
+                    durationMillis = animationDuration.toInt(),
                     easing = LinearEasing
                 )
             )
         }
-        Slider(
-            value = sliderValue.value,
-            onValueChange = {
-                canPlayerChangeSliderValue = false
-                coroutineScope.launch {
-                    sliderValue.snapTo(it)
-                }
-                playbackControls.seekTo(it)
-            },
-            onValueChangeFinished = {
-                canPlayerChangeSliderValue = true
-            },
-            valueRange = 0f..1f,
-            modifier = Modifier.fillMaxWidth()
+    }
+    LaunchedEffect(isPlaying, playbackSpeed) {
+        if (!canPlayerChangeSliderValue) {
+            return@LaunchedEffect
+        }
+        if (!isPlaying) {
+            sliderValue.stop()
+            return@LaunchedEffect
+        }
+        if (currentVideoDuration == 0L) {
+            return@LaunchedEffect
+        }
+        val sliderIncrement = oneSecondProgressIncrement * animationDurationMultiplier
+        val animationDuration = currentPositionPollingInterval * animationDurationMultiplier
+        sliderValue.animateTo(
+            targetValue = sliderValue.value + sliderIncrement,
+            animationSpec = tween(
+                durationMillis = animationDuration.toInt(),
+                easing = LinearEasing
+            )
         )
     }
+    Slider(
+        value = sliderValue.value,
+        onValueChange = {
+            canPlayerChangeSliderValue = false
+            coroutineScope.launch {
+                sliderValue.snapTo(it)
+            }
+            seekTo(it)
+        },
+        onValueChangeFinished = {
+            canPlayerChangeSliderValue = true
+        },
+        valueRange = 0f..1f,
+        modifier = modifier
+    )
 }
 
 @Composable
