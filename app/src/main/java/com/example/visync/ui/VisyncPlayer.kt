@@ -21,6 +21,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,6 +40,7 @@ import androidx.media3.ui.PlayerView
 import com.example.visync.R
 import com.example.visync.data.videofiles.Videofile
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @Composable
 fun VisyncPlayer(
@@ -119,13 +121,19 @@ fun VisyncPlayerOverlay(
                 playbackControls.seekTo(playbackState.currentPosition+5000)
             }
         )
-        val useAnimatedSlider = false
+        val useAnimatedSlider = true
         if (useAnimatedSlider) {
+            val adjustedPlaybackSpeed = ensureActualPlaybackSpeedChange(
+                currentPosition = playbackState.currentPosition,
+                currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
+                newPlaybackSpeed = playbackState.playbackSpeed,
+                confidenceFactor = 5
+            )
             AnimatedVideoProgressSlider(
                 currentVideoDuration = playbackState.currentVideoDuration,
                 currentPosition = playbackState.currentPosition,
                 currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
-                playbackSpeed = playbackState.playbackSpeed,
+                playbackSpeed = adjustedPlaybackSpeed,
                 isPlaying = playbackState.isPlaying,
                 seekTo = playbackControls::seekTo,
                 modifier = Modifier.fillMaxWidth()
@@ -176,6 +184,53 @@ fun VideoProgressSlider(
 }
 
 /**
+ *  Calculate if playback speed change really happened
+ *  with respect to [currentPositionPollingInterval].
+ *
+ *  This is a workaround fix for [this issue](https://github.com/google/ExoPlayer/issues/7982).
+ *
+ *  @param currentPosition last known playback position
+ *  @param currentPositionPollingInterval delay between playback position updates
+ *  @param newPlaybackSpeed last known playback speed
+ *  @param confidenceFactor how much closer should new speed match playback
+ *  in comparison to the old speed
+ *
+ *  @return [newPlaybackSpeed] if it better matches
+ *  [currentPosition] change after previous invocation.
+ *  Otherwise returns playback speed that was remembered before.
+ */
+@Composable
+private fun ensureActualPlaybackSpeedChange(
+    currentPosition: Long,
+    currentPositionPollingInterval: Int,
+    newPlaybackSpeed: Float,
+    confidenceFactor: Int,
+): Float {
+    var prevPlaybackSpeed by remember { mutableFloatStateOf(newPlaybackSpeed) }
+    var prevPosition by remember { mutableLongStateOf(currentPosition) }
+    if (newPlaybackSpeed == prevPlaybackSpeed) {
+        prevPosition = currentPosition
+        return newPlaybackSpeed
+    }
+    if (currentPosition == prevPosition) {
+        return prevPlaybackSpeed
+    }
+    val prevCalculatedPositionChange = currentPositionPollingInterval * prevPlaybackSpeed
+    val newCalculatedPositionChange = currentPositionPollingInterval * newPlaybackSpeed
+    val actualPositionChange = currentPosition - prevPosition
+    val differenceWithPrevSpeed = abs(actualPositionChange - prevCalculatedPositionChange)
+    val differenceWithNewSpeed = abs(actualPositionChange - newCalculatedPositionChange)
+    val speedChangeHappened = differenceWithNewSpeed * confidenceFactor < differenceWithPrevSpeed
+    if (speedChangeHappened) {
+        prevPosition = currentPosition
+        prevPlaybackSpeed = newPlaybackSpeed
+        return newPlaybackSpeed
+    }
+    prevPosition = currentPosition
+    return prevPlaybackSpeed
+}
+
+/**
  *  Slider that smoothly animates its value to the next position
  *  when [currentPosition] or [isPlaying] changes with respect to
  *  current [playbackSpeed] and [currentPositionPollingInterval].
@@ -219,7 +274,6 @@ fun AnimatedVideoProgressSlider(
         val newSliderValue = currentPosition / currentVideoDuration.toFloat()
         sliderValue.snapTo(newSliderValue)
         if (!isPlaying) {
-            sliderValue.snapTo(newSliderValue)
             return@LaunchedEffect
         }
         val pollingIntervalMultiplier = currentPositionPollingInterval / 1000f
