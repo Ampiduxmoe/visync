@@ -38,7 +38,7 @@ class VisyncPlayerViewModel @Inject constructor(
             playbackSpeed = 1f,
             currentVideoDuration = 0,
             currentPosition = 0,
-            currentPositionPollingInterval = 1000,
+            currentPositionPollingInterval = 125,
             repeatMode = Player.REPEAT_MODE_OFF,
             hasPrevious = false,
             hasNext = false,
@@ -380,6 +380,7 @@ interface VisyncPlayerPlaybackControls {
     fun seekTo(timeMillis: Long)
     fun setPlaybackSpeed(speed: Float)
     fun toggleRepeatMode()
+    fun setCurrentPositionPollingRate(interval: Int)
 }
 
 private fun buildVisyncPlayerPlaybackControls(
@@ -413,5 +414,8 @@ private fun buildVisyncPlayerPlaybackControls(
     }
     override fun toggleRepeatMode() {
         player.repeatMode = (player.repeatMode + 1) % 3
+    }
+    override fun setCurrentPositionPollingRate(interval: Int) {
+        TODO("Not yet implemented")
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -118,20 +119,77 @@ fun VisyncPlayerOverlay(
                 playbackControls.seekTo(playbackState.currentPosition+5000)
             }
         )
-        VisyncPlayerSlider(
-            currentVideoDuration = playbackState.currentVideoDuration,
-            currentPosition = playbackState.currentPosition,
-            currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
-            playbackSpeed = playbackState.playbackSpeed,
-            isPlaying = playbackState.isPlaying,
-            seekTo = playbackControls::seekTo,
-            modifier = Modifier.fillMaxWidth()
-        )
+        val useAnimatedSlider = false
+        if (useAnimatedSlider) {
+            AnimatedVideoProgressSlider(
+                currentVideoDuration = playbackState.currentVideoDuration,
+                currentPosition = playbackState.currentPosition,
+                currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
+                playbackSpeed = playbackState.playbackSpeed,
+                isPlaying = playbackState.isPlaying,
+                seekTo = playbackControls::seekTo,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            VideoProgressSlider(
+                currentVideoDuration = playbackState.currentVideoDuration,
+                currentPosition = playbackState.currentPosition,
+                seekTo = playbackControls::seekTo
+            )
+        }
     }
 }
 
 @Composable
-fun VisyncPlayerSlider(
+fun VideoProgressSlider(
+    currentVideoDuration: Long,
+    currentPosition: Long,
+    seekTo: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var sliderValue by remember { mutableFloatStateOf(0f) }
+    var canPlayerChangeSliderValue by remember { mutableStateOf(true) }
+    LaunchedEffect(currentPosition, currentVideoDuration) {
+        if (!canPlayerChangeSliderValue) {
+            return@LaunchedEffect
+        }
+        if (currentVideoDuration == 0L) {
+            sliderValue = 0f
+            return@LaunchedEffect
+        }
+        val newSliderValue = currentPosition / currentVideoDuration.toFloat()
+        sliderValue = newSliderValue
+    }
+    Slider(
+        value = sliderValue,
+        onValueChange = {
+            canPlayerChangeSliderValue = false
+            sliderValue = it
+            seekTo(it)
+        },
+        onValueChangeFinished = {
+            canPlayerChangeSliderValue = true
+        },
+        valueRange = 0f..1f,
+        modifier = modifier
+    )
+}
+
+/**
+ *  Slider that smoothly animates its value to the next position
+ *  when [currentPosition] or [isPlaying] changes with respect to
+ *  current [playbackSpeed] and [currentPositionPollingInterval].
+ *
+ *  It is not recommended to use this slider if there are frequent
+ *  and/or drastic changes to [playbackSpeed] with actual player
+ *  playback speed being not properly synchronized to it, slider
+ *  will jitter because of this.
+ *
+ *  For playback speed possibly being out of sync with actual playback
+ *  see [this issue](https://github.com/google/ExoPlayer/issues/7982).
+ */
+@Composable
+fun AnimatedVideoProgressSlider(
     currentVideoDuration: Long,
     currentPosition: Long,
     currentPositionPollingInterval: Int,
@@ -150,7 +208,7 @@ fun VisyncPlayerSlider(
             else -> 1000f / currentVideoDuration * playbackSpeed
         }
     }
-    LaunchedEffect(currentPosition) {
+    LaunchedEffect(currentPosition, currentVideoDuration) {
         if (!canPlayerChangeSliderValue) {
             return@LaunchedEffect
         }
@@ -160,17 +218,24 @@ fun VisyncPlayerSlider(
         }
         val newSliderValue = currentPosition / currentVideoDuration.toFloat()
         sliderValue.snapTo(newSliderValue)
-        if (isPlaying) {
-            val sliderIncrement = oneSecondProgressIncrement * animationDurationMultiplier
-            val animationDuration = currentPositionPollingInterval * animationDurationMultiplier
-            sliderValue.animateTo(
-                targetValue = newSliderValue + sliderIncrement,
-                animationSpec = tween(
-                    durationMillis = animationDuration.toInt(),
-                    easing = LinearEasing
-                )
-            )
+        if (!isPlaying) {
+            sliderValue.snapTo(newSliderValue)
+            return@LaunchedEffect
         }
+        val pollingIntervalMultiplier = currentPositionPollingInterval / 1000f
+        val sliderIncrement = (
+            oneSecondProgressIncrement *
+            pollingIntervalMultiplier *
+            animationDurationMultiplier
+        )
+        val animationDuration = currentPositionPollingInterval * animationDurationMultiplier
+        sliderValue.animateTo(
+            targetValue = newSliderValue + sliderIncrement,
+            animationSpec = tween(
+                durationMillis = animationDuration.toInt(),
+                easing = LinearEasing
+            )
+        )
     }
     LaunchedEffect(isPlaying, playbackSpeed) {
         if (!canPlayerChangeSliderValue) {
@@ -183,7 +248,12 @@ fun VisyncPlayerSlider(
         if (currentVideoDuration == 0L) {
             return@LaunchedEffect
         }
-        val sliderIncrement = oneSecondProgressIncrement * animationDurationMultiplier
+        val pollingIntervalMultiplier = currentPositionPollingInterval / 1000f
+        val sliderIncrement = (
+            oneSecondProgressIncrement *
+            pollingIntervalMultiplier *
+            animationDurationMultiplier
+        )
         val animationDuration = currentPositionPollingInterval * animationDurationMultiplier
         sliderValue.animateTo(
             targetValue = sliderValue.value + sliderIncrement,
