@@ -1,4 +1,4 @@
-package com.example.visync.ui.screens
+package com.example.visync.ui.screens.main.rooms
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

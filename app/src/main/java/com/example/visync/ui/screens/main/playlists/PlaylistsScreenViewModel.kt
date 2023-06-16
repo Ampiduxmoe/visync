@@ -1,4 +1,4 @@
-package com.example.visync.ui.screens
+package com.example.visync.ui.screens.main.playlists
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel

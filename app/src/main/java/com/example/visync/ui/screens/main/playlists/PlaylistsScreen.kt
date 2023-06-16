@@ -1,4 +1,4 @@
-package com.example.visync.ui.screens
+package com.example.visync.ui.screens.main.playlists
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -38,10 +38,10 @@ import com.example.visync.R
 import com.example.visync.data.playlists.Playlist
 import com.example.visync.data.playlists.PlaylistWithVideofiles
 import com.example.visync.data.videofiles.Videofile
-import com.example.visync.ui.ContentDisplayMode
 import com.example.visync.ui.components.VisyncTopAppBar
 import com.example.visync.ui.components.lists.PlaylistItem
 import com.example.visync.ui.components.lists.VideofileItem
+import com.example.visync.ui.screens.main.ContentDisplayMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

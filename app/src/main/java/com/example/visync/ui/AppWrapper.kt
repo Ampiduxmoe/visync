@@ -16,6 +16,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.visync.ui.components.navigation.AppNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
+import com.example.visync.ui.screens.main.MainApp
+import com.example.visync.ui.screens.main.MainAppViewModel
+import com.example.visync.ui.screens.player.VisyncPlayer
+import com.example.visync.ui.screens.player.VisyncPlayerViewModel
 
 @Composable
 fun AppWrapper(
@@ -34,7 +38,7 @@ fun AppWrapper(
     val visyncPlayerUiState by visyncPlayerViewModel
         .uiState.collectAsStateWithLifecycle()
     val visyncPLayerPlaybackState by visyncPlayerViewModel
-        .playbackState.collectAsStateWithLifecycle()
+        .playerWrapper.playbackState.collectAsStateWithLifecycle()
 
     /**
      *  How much time to give to composition process
@@ -75,11 +79,11 @@ fun AppWrapper(
             VisyncPlayer(
                 playerUiState = visyncPlayerUiState,
                 playerPlaybackState = visyncPLayerPlaybackState,
-                playerPlaybackControls = visyncPlayerViewModel.playbackControls,
+                playerPlaybackControls = visyncPlayerViewModel.playerWrapper.playbackControls,
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
                 },
-                player = visyncPlayerViewModel.getPlayer()
+                player = visyncPlayerViewModel.playerWrapper.getPlayer()
             )
         }
     }

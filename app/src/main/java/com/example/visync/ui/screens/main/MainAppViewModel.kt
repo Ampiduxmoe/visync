@@ -1,4 +1,4 @@
-package com.example.visync.ui
+package com.example.visync.ui.screens.main
 
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel

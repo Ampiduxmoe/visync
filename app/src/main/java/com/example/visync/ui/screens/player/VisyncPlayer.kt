@@ -1,4 +1,4 @@
-package com.example.visync.ui
+package com.example.visync.ui.screens.player
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
@@ -39,14 +39,16 @@ import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.example.visync.R
 import com.example.visync.data.videofiles.Videofile
+import com.example.visync.player.PlayerWrapperPlaybackControls
+import com.example.visync.player.PlayerWrapperPlaybackState
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 @Composable
 fun VisyncPlayer(
     playerUiState: VisyncPlayerUiState,
-    playerPlaybackState: VisyncPlayerPlaybackState,
-    playerPlaybackControls: VisyncPlayerPlaybackControls,
+    playerPlaybackState: PlayerWrapperPlaybackState,
+    playerPlaybackControls: PlayerWrapperPlaybackControls,
     closePlayer: () -> Unit,
     player: Player,
 ) {
@@ -72,8 +74,8 @@ fun VisyncPlayer(
 @Composable
 fun VisyncPlayerOverlay(
     selectedVideofile: Videofile?,
-    playbackState: VisyncPlayerPlaybackState,
-    playbackControls: VisyncPlayerPlaybackControls,
+    playbackState: PlayerWrapperPlaybackState,
+    playbackControls: PlayerWrapperPlaybackControls,
     closePlayer: () -> Unit,
     modifier: Modifier = Modifier,
 ) {

@@ -1,4 +1,4 @@
-package com.example.visync.ui
+package com.example.visync.ui.screens.main
 
 import android.util.Log
 import androidx.compose.foundation.layout.Column
@@ -17,10 +17,10 @@ import com.example.visync.data.playlists.PlaylistWithVideofiles
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.MainAppNavigation
 import com.example.visync.ui.components.navigation.NavigationType
-import com.example.visync.ui.screens.PlaylistsScreen
-import com.example.visync.ui.screens.PlaylistsScreenViewModel
-import com.example.visync.ui.screens.RoomsScreen
-import com.example.visync.ui.screens.RoomsScreenViewModel
+import com.example.visync.ui.screens.main.playlists.PlaylistsScreen
+import com.example.visync.ui.screens.main.playlists.PlaylistsScreenViewModel
+import com.example.visync.ui.screens.main.rooms.RoomsScreen
+import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
 
 @Composable
 fun MainApp(
