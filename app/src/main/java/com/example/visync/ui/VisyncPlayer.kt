@@ -123,17 +123,22 @@ fun VisyncPlayerOverlay(
         )
         val useAnimatedSlider = true
         if (useAnimatedSlider) {
-            val adjustedPlaybackSpeed = ensureActualPlaybackSpeedChange(
-                currentPosition = playbackState.currentPosition,
-                currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
-                newPlaybackSpeed = playbackState.playbackSpeed,
-                confidenceFactor = 5
-            )
+            val adjustPlaybackSpeed = false
+            val playbackSpeed = when (adjustPlaybackSpeed) {
+                true -> ensureActualPlaybackSpeedChange(
+                    currentPosition = playbackState.currentPosition,
+                    currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
+                    newPlaybackSpeed = playbackState.playbackSpeed,
+                    confidenceFactor = 5
+                )
+                // if playback speed is only adjustable before playing a video
+                false -> playbackState.playbackSpeed
+            }
             AnimatedVideoProgressSlider(
                 currentVideoDuration = playbackState.currentVideoDuration,
                 currentPosition = playbackState.currentPosition,
                 currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
-                playbackSpeed = adjustedPlaybackSpeed,
+                playbackSpeed = playbackSpeed,
                 isPlaying = playbackState.isPlaying,
                 seekTo = playbackControls::seekTo,
                 modifier = Modifier.fillMaxWidth()
