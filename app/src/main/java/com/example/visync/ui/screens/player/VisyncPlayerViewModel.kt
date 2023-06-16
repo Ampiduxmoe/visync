@@ -20,7 +20,8 @@ class VisyncPlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         VisyncPlayerUiState(
             currentPlaylist = mapOf(),
-            selectedVideofile = null
+            selectedVideofile = null,
+            isOverlayVisible = false
         )
     )
     val uiState: StateFlow<VisyncPlayerUiState> = _uiState
@@ -50,10 +51,6 @@ class VisyncPlayerViewModel @Inject constructor(
         playerWrapper.setPlayerListener(eventListener)
     }
 
-    private fun videofileToMediaItem(videofile: Videofile): MediaItem {
-        return MediaItem.fromUri(videofile.uri)
-    }
-
     fun setVideofilesToPlay(
         videofilesToPlay: List<Videofile>,
         startFrom: Int,
@@ -74,6 +71,10 @@ class VisyncPlayerViewModel @Inject constructor(
         )
     }
 
+    private fun videofileToMediaItem(videofile: Videofile): MediaItem {
+        return MediaItem.fromUri(videofile.uri)
+    }
+
     private fun setSelectedVideofileByMediaItem(mediaItem: MediaItem?) {
         val newSelectedVideofile = _uiState.value
             .currentPlaylist
@@ -88,6 +89,18 @@ class VisyncPlayerViewModel @Inject constructor(
         )
     }
 
+    fun hideOverlay() {
+        _uiState.value = _uiState.value.copy(
+            isOverlayVisible = false
+        )
+    }
+
+    fun showOverlay() {
+        _uiState.value = _uiState.value.copy(
+            isOverlayVisible = true
+        )
+    }
+
     override fun onCleared() {
         super.onCleared()
         playerWrapper.removePlayerListener()
@@ -98,4 +111,5 @@ class VisyncPlayerViewModel @Inject constructor(
 data class VisyncPlayerUiState(
     val currentPlaylist: Map<Videofile, MediaItem>,
     val selectedVideofile: Videofile?,
+    val isOverlayVisible: Boolean,
 )

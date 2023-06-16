@@ -80,6 +80,8 @@ fun AppWrapper(
                 playerUiState = visyncPlayerUiState,
                 playerPlaybackState = visyncPLayerPlaybackState,
                 playerPlaybackControls = visyncPlayerViewModel.playerWrapper.playbackControls,
+                showOverlay = visyncPlayerViewModel::showOverlay,
+                hideOverlay = visyncPlayerViewModel::hideOverlay,
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
                 },
