@@ -11,7 +11,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,7 +23,6 @@ import com.example.visync.player.PlayerWrapperPlaybackState
 import com.example.visync.ui.components.player.ExoPlayerComposable
 import com.example.visync.ui.components.player.VisyncPlayerOverlay
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -42,7 +40,6 @@ fun VisyncPlayer(
     val isOverlayVisible = playerUiState.isOverlayVisible
     val coroutineScope = rememberCoroutineScope()
     var currentHideWithDelayJob by remember { mutableStateOf<Job?>(null) }
-    var isAutoHidingEnabled by remember { mutableStateOf(true) }
     val defaultDelay = 2500L
     val hideOverlayWithDelay: (Long) -> Job = { delayMillis ->
         coroutineScope.launch {
@@ -65,18 +62,6 @@ fun VisyncPlayer(
         } else {
             showOverlay()
             refreshHidingDelay(defaultDelay)
-        }
-    }
-    LaunchedEffect(isAutoHidingEnabled) {
-        /*
-            Currently overlay still hides when user taps seekbar
-            TODO fix
-        */
-        if (isAutoHidingEnabled) {
-            refreshHidingDelay(defaultDelay)
-        } else {
-            currentHideWithDelayJob?.cancelAndJoin()
-            showOverlay()
         }
     }
     DisposableEffect(Unit) {
@@ -110,8 +95,8 @@ fun VisyncPlayer(
             playbackControls = playerPlaybackControls,
             onOverlayClicked = { refreshHidingDelay(defaultDelay) },
             closePlayer = closePlayer,
-            disableAutoHiding = { isAutoHidingEnabled = false },
-            enableAutoHiding = { isAutoHidingEnabled = true },
+            disableAutoHiding = { currentHideWithDelayJob?.cancel() },
+            enableAutoHiding = { refreshHidingDelay(defaultDelay) },
             modifier = Modifier.fillMaxSize()
         )
     }
