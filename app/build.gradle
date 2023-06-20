@@ -49,6 +49,9 @@ android {
 }
 
 dependencies {
+    // nearby connections
+    implementation 'com.google.android.gms:play-services-nearby:18.5.0'
+
     // media3
     implementation 'androidx.media3:media3-exoplayer:1.0.2'
     implementation 'androidx.media3:media3-ui:1.0.2'
