@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -33,6 +34,10 @@ fun AppWrapper(
     val mainAppViewModel = hiltViewModel<MainAppViewModel>()
     val mainAppUiState by mainAppViewModel
         .uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    mainAppViewModel.initializeNavigationUiState(context)
+    val sideNavigationUiState by mainAppViewModel
+        .mainAppNavigationUiState.collectAsStateWithLifecycle()
 
     val visyncPlayerViewModel = hiltViewModel<VisyncPlayerViewModel>()
     val visyncPlayerUiState by visyncPlayerViewModel
@@ -62,10 +67,11 @@ fun AppWrapper(
             MainApp(
                 windowSize = windowSize,
                 mainAppUiState = mainAppUiState,
-                playPlaylist = { playlistWithVideofiles, startFrom ->
+                mainAppNavigationUiState = sideNavigationUiState,
+                playPlaylist = { options ->
                     visyncPlayerViewModel.setVideofilesToPlay(
-                        videofilesToPlay = playlistWithVideofiles.videofiles,
-                        startFrom = startFrom
+                        videofilesToPlay = options.playlist.videofiles,
+                        startFrom = options.startFrom
                     )
                     topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
                 }

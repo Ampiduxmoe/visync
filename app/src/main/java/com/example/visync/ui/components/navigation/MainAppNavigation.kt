@@ -16,10 +16,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.visync.ui.screens.main.MainAppNavigationUiState
 import kotlinx.coroutines.launch
 
 @Composable
 fun MainAppNavigation(
+    uiState: MainAppNavigationUiState,
     navigationType: NavigationType,
     navController: NavHostController,
     appContent: @Composable MainAppNavigationScope.() -> Unit,
@@ -61,7 +63,8 @@ fun MainAppNavigation(
                         showMainDestinations = false,
                         closeDrawer = {
                             mainAppNavigationScope.closeDrawer()
-                        }
+                        },
+                        editableUsername = uiState.editableUsername
                     )
                 },
                 drawerState = drawerState
@@ -96,7 +99,8 @@ fun MainAppNavigation(
                         showMainDestinations = true,
                         closeDrawer = {
                             mainAppNavigationScope.closeDrawer()
-                        }
+                        },
+                        editableUsername = uiState.editableUsername
                     )
                 },
                 drawerState = drawerState
@@ -136,6 +140,7 @@ fun MainAppNavigation(
                         },
                         scrollState = rememberScrollState(),
                         drawerState = collapsableDrawerState,
+                        editableUsername = uiState.editableUsername
                     )
                 }
             ) {

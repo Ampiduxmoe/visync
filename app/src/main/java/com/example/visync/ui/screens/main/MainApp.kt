@@ -75,7 +75,8 @@ import javax.inject.Inject
 fun MainApp(
     windowSize: WindowSizeClass,
     mainAppUiState: MainAppUiState,
-    playPlaylist: (playlist: PlaylistWithVideofiles, startFrom: Int) -> Unit,
+    mainAppNavigationUiState: MainAppNavigationUiState,
+    playPlaylist: (PlaybackStartOptions) -> Unit,
 ) {
     val navigationType: NavigationType
     val preferredDisplayMode: ContentDisplayMode
@@ -104,6 +105,7 @@ fun MainApp(
 
     val navController = rememberNavController()
     MainAppNavigation(
+        uiState = mainAppNavigationUiState,
         navigationType = navigationType,
         navController = navController
     ) {
@@ -129,10 +131,12 @@ fun MainApp(
                             }!! // since videofile always belongs to a playlist
                         val videofileIndex = parentPlaylistWithVideofiles.videofiles
                             .indexOf(videofile)
-                        playPlaylist(
-                            /* playlist = */ parentPlaylistWithVideofiles,
-                            /* startFrom = */ videofileIndex
+                        val playbackStartOptions = PlaybackStartOptions(
+                            playlist = parentPlaylistWithVideofiles,
+                            startFrom = videofileIndex,
+                            playbackMode = VisyncPlaybackMode.GROUP
                         )
+                        playPlaylist(playbackStartOptions)
                     },
                     openDrawer = openDrawer
                 )
@@ -443,7 +447,7 @@ class NearbyConnectionsViewModel @Inject constructor(
                 "mySuperApp",
                 object : EndpointDiscoveryCallback() {
                     override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-                        Log.d("startDiscovering", "onEndpointFound: $endpointId")
+                        Log.d("startDiscovering", "onEndpointFound: $endpointId (${info.endpointName})")
                         addDiscoveredEndpoint(
                             discoveredEndpointId = endpointId,
                             endpointInfo = info,
@@ -699,4 +703,14 @@ private fun pickRequiredPermissions(
         }
     }
     return requiredPermissions
+}
+
+data class PlaybackStartOptions(
+    val playlist: PlaylistWithVideofiles,
+    val startFrom: Int,
+    val playbackMode: VisyncPlaybackMode,
+)
+
+enum class VisyncPlaybackMode {
+    ALONE, GROUP
 }

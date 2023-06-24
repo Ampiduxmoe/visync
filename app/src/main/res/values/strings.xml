@@ -10,7 +10,11 @@
     <string name="desc_pause">Pause video</string>
     <string name="desc_unpause">Unpause video</string>
 
-    <!--this us random string for experimenting-->
+    <!--preferences-->
+    <string name="prefs_profile_file_key">PROFILE_PREFERENCES</string>
+    <string name="prefs_profile_username">nickname</string>
+
+    <!--random strings for experimenting-->
     <string name="navigation_drawer_fab">Navigation Drawer Button</string>
     <string name="navigation_drawer_fab_text">Some Action</string>
     <string name="desc_search_button">Search Button</string>

@@ -1,4 +1,4 @@
-package com.example.visync.data
+package com.example.visync.data.user
 
 data class User(
     val id: Long,

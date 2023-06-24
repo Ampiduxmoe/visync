@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +55,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import com.example.visync.R
+import com.example.visync.data.user.generateNickname
+import com.example.visync.ui.screens.main.EditableUsername
 
 @Composable
 fun ModalNavigationDrawerContent(
@@ -62,6 +65,7 @@ fun ModalNavigationDrawerContent(
     scrollState: ScrollState,
     showMainDestinations: Boolean,
     closeDrawer: () -> Unit,
+    editableUsername: EditableUsername,
 ) {
     ModalDrawerSheet {
         DrawerSheetContent(
@@ -71,6 +75,7 @@ fun ModalNavigationDrawerContent(
             showCloseDrawerButton = true,
             closeDrawerButtonClick = closeDrawer,
             showMainDestinations = showMainDestinations,
+            editableUsername = editableUsername,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -83,12 +88,12 @@ fun PermanentNavigationDrawerContent(
     scrollState: ScrollState,
     showCloseDrawerButton: Boolean,
     closeDrawerButtonClick: () -> Unit,
+    editableUsername: EditableUsername,
     @SuppressLint("ModifierParameter")
     drawerSheetModifier: Modifier = Modifier,
     @SuppressLint("ModifierParameter")
     drawerSheetContentModifier: Modifier = Modifier,
 ) {
-
     PermanentDrawerSheet(
         modifier = drawerSheetModifier
     ) {
@@ -99,10 +104,10 @@ fun PermanentNavigationDrawerContent(
             showCloseDrawerButton = showCloseDrawerButton,
             closeDrawerButtonClick = closeDrawerButtonClick,
             showMainDestinations = true,
+            editableUsername = editableUsername,
             modifier = drawerSheetContentModifier
         )
     }
-
 }
 
 @Composable
@@ -113,8 +118,10 @@ private fun DrawerSheetContent(
     showCloseDrawerButton: Boolean,
     closeDrawerButtonClick: () -> Unit,
     showMainDestinations: Boolean,
+    editableUsername: EditableUsername,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     Column(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = modifier.verticalScroll(scrollState)
@@ -152,7 +159,10 @@ private fun DrawerSheetContent(
         }
 
         ExtendedFloatingActionButton(
-            onClick = {},
+            onClick = {
+                editableUsername.setValue(generateNickname())
+                editableUsername.applyChanges(context)
+            },
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
         ) {
@@ -162,7 +172,7 @@ private fun DrawerSheetContent(
                 modifier = Modifier.size(18.dp)
             )
             Text(
-                text = stringResource(id = R.string.navigation_drawer_fab_text),
+                text = editableUsername.value,
                 modifier = Modifier.weight(1f),
                 textAlign = TextAlign.Center
             )
@@ -327,6 +337,7 @@ fun CollapsableNavigationDrawerContent(
     navigateToDestination: (Route) -> Unit,
     scrollState: ScrollState,
     drawerState: MutableState<CollapsableDrawerState>,
+    editableUsername: EditableUsername,
     permanentDrawerWidth: Dp = 256.dp,
     railWidth: Dp = 80.dp,
 ) {
@@ -350,6 +361,7 @@ fun CollapsableNavigationDrawerContent(
             permanentDrawerTransitionState.value =
                 CollapsableDrawerState.COLLAPSED
         },
+        editableUsername = editableUsername,
         drawerSheetContentModifier = Modifier
             .width(permanentDrawerWidth),
         drawerSheetModifier = drawerSheetModifier
@@ -503,7 +515,8 @@ private fun Modifier.overflowHiddenForDrawer(
     minimumActualWidth: Dp,
 ): Modifier = this.composed {
     val pxClipValue = with(LocalDensity.current) { clipWidth.toPx() }
-    this.width(clipWidth.coerceAtLeast(minimumActualWidth))
+    this
+        .width(clipWidth.coerceAtLeast(minimumActualWidth))
         .horizontalScroll(ScrollState(0))
         .drawWithContent {
             clipRect(right = pxClipValue) {
@@ -517,8 +530,9 @@ private fun Modifier.slideInAndOutForDrawer(
     minimumActualWidth: Dp,
     maximumActualWidth: Dp,
 ): Modifier = this.composed {
-    this.width(clipWidth.coerceAtLeast(minimumActualWidth))
-        .horizontalScroll(remember{ ScrollState(0) }, false)
+    this
+        .width(clipWidth.coerceAtLeast(minimumActualWidth))
+        .horizontalScroll(remember { ScrollState(0) }, false)
         .offset(x = clipWidth - maximumActualWidth)
 }
 
