@@ -12,7 +12,7 @@
 
     <!--preferences-->
     <string name="prefs_profile_file_key">PROFILE_PREFERENCES</string>
-    <string name="prefs_profile_username">nickname</string>
+    <string name="prefs_profile_username">username</string>
 
     <!--random strings for experimenting-->
     <string name="navigation_drawer_fab">Navigation Drawer Button</string>
