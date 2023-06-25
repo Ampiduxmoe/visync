@@ -2,7 +2,6 @@ package com.example.visync.ui.screens.main
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
@@ -38,7 +37,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -52,24 +50,7 @@ import com.example.visync.ui.screens.main.playlists.PlaylistsScreen
 import com.example.visync.ui.screens.main.playlists.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.main.rooms.RoomsScreen
 import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
-import com.google.android.gms.nearby.Nearby
-import com.google.android.gms.nearby.connection.AdvertisingOptions
-import com.google.android.gms.nearby.connection.ConnectionInfo
-import com.google.android.gms.nearby.connection.ConnectionLifecycleCallback
-import com.google.android.gms.nearby.connection.ConnectionResolution
-import com.google.android.gms.nearby.connection.ConnectionsClient
-import com.google.android.gms.nearby.connection.ConnectionsStatusCodes
-import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo
-import com.google.android.gms.nearby.connection.DiscoveryOptions
-import com.google.android.gms.nearby.connection.EndpointDiscoveryCallback
-import com.google.android.gms.nearby.connection.Payload
-import com.google.android.gms.nearby.connection.PayloadCallback
-import com.google.android.gms.nearby.connection.PayloadTransferUpdate
-import com.google.android.gms.nearby.connection.Strategy
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
+import com.example.visync.ui.screens.player.PlaybackSetupViewModel
 
 @Composable
 fun MainApp(
@@ -226,9 +207,11 @@ fun MainApp(
                 }
             }
             composable("testNearbyConnections") {
-                val nearbyConnectionsViewModel = hiltViewModel<NearbyConnectionsViewModel>()
-                val nearbyConnectionsState by nearbyConnectionsViewModel
+                val nearbyConnectionsViewModel = hiltViewModel<PlaybackSetupViewModel>()
+                val connectionsWrapper = nearbyConnectionsViewModel.visyncNearbyConnectionsImpl
+                val nearbyConnectionsState by connectionsWrapper
                     .connectionsState.collectAsStateWithLifecycle()
+                val username = mainAppNavigationUiState.editableUsername.value
                 val context = LocalContext.current
                 Column(modifier = Modifier.fillMaxSize()) {
                     Text("current status = ${nearbyConnectionsState.status}")
@@ -238,7 +221,7 @@ fun MainApp(
                     ) {
                         Row {
                             IconButton(
-                                onClick = { nearbyConnectionsViewModel.startAdvertising(context) }
+                                onClick = { connectionsWrapper.startAdvertising(username, context) }
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
@@ -249,7 +232,7 @@ fun MainApp(
                         }
                         Row {
                             IconButton(
-                                onClick = { nearbyConnectionsViewModel.stopAdvertising?.invoke() }
+                                onClick = connectionsWrapper::stopAdvertising
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Delete,
@@ -265,7 +248,7 @@ fun MainApp(
                     ) {
                         Row {
                             IconButton(
-                                onClick = { nearbyConnectionsViewModel.startDiscovering(context) }
+                                onClick = { connectionsWrapper.startDiscovering(username, context) }
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
@@ -276,7 +259,7 @@ fun MainApp(
                         }
                         Row {
                             IconButton(
-                                onClick = { nearbyConnectionsViewModel.stopDiscovering?.invoke() }
+                                onClick = connectionsWrapper::stopDiscovering
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Delete,
@@ -295,8 +278,11 @@ fun MainApp(
                     )
                     Button(
                         onClick = {
-                            nearbyConnectionsViewModel.sendMessage(currentMessage.value)
-                            currentMessage.value = ""
+                            val connection = nearbyConnectionsState.runningConnections.firstOrNull()
+                            connection?.let {
+                                connection.sendMessage(currentMessage.value)
+                                currentMessage.value = ""
+                            }
                         }
                     ) {
                         Text("send this message!")
@@ -368,328 +354,6 @@ fun MainApp(
     }
 }
 
-enum class ContentDisplayMode {
-    SINGLE_COLUMN, DUAL_COLUMN
-}
-
-@HiltViewModel
-class NearbyConnectionsViewModel @Inject constructor(
-
-) : ViewModel() {
-
-    private val _connectionsState = MutableStateFlow(
-        NearbyConnectionsState(
-            status = "idle",
-            discoveredEndpoints = listOf(),
-            connectionRequests = listOf(),
-            runningConnections = listOf(),
-            messages = listOf()
-        )
-    )
-    val connectionsState: StateFlow<NearbyConnectionsState> = _connectionsState
-
-    init {
-
-    }
-
-    var sendMessage: (msg: String) -> Unit = {}
-        private set
-
-    var stopAdvertising: (() -> Unit)? = null
-        private set
-
-    fun startAdvertising(context: Context) {
-        if (stopAdvertising != null || stopDiscovering != null) {
-            return
-        }
-        val advertisingOptions = AdvertisingOptions.Builder()
-            .setStrategy(Strategy.P2P_STAR)
-            .build()
-        val connectionsClient = Nearby.getConnectionsClient(context)
-        connectionsClient
-            .startAdvertising(
-                "advertiser",
-                "mySuperApp",
-                getDefaultConnectionLifecycleCallback(connectionsClient),
-                advertisingOptions
-            )
-            .addOnSuccessListener {
-                Log.d("startAdvertising", "started advertising")
-                _connectionsState.value = _connectionsState.value.copy(
-                    status = "advertising"
-                )
-            }
-            .addOnFailureListener {
-                Log.e("startAdvertising", "error!", it)
-            }
-        stopAdvertising = {
-            connectionsClient.stopAdvertising()
-            stopAdvertising = null
-            _connectionsState.value = _connectionsState.value.copy(
-                status = "idle"
-            )
-        }
-    }
-
-    var stopDiscovering: (() -> Unit)? = null
-        private set
-
-    fun startDiscovering(context: Context) {
-        if (stopAdvertising != null || stopDiscovering != null) {
-            return
-        }
-        val discoveryOptions = DiscoveryOptions.Builder()
-            .setStrategy(Strategy.P2P_STAR)
-            .build()
-        val connectionsClient = Nearby.getConnectionsClient(context)
-        connectionsClient
-            .startDiscovery(
-                "mySuperApp",
-                object : EndpointDiscoveryCallback() {
-                    override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-                        Log.d("startDiscovering", "onEndpointFound: $endpointId (${info.endpointName})")
-                        addDiscoveredEndpoint(
-                            discoveredEndpointId = endpointId,
-                            endpointInfo = info,
-                            connectionsClient = connectionsClient
-                        )
-                    }
-                    override fun onEndpointLost(endpointId: String) {
-                        Log.d("startDiscovering", "onEndpointLost: $endpointId")
-                        removeDiscoveredEndpoint(endpointId)
-                    }
-                },
-                discoveryOptions
-            )
-            .addOnSuccessListener {
-                Log.d("startAdvertising", "started discovering")
-                _connectionsState.value = _connectionsState.value.copy(
-                    status = "discovering"
-                )
-            }
-            .addOnFailureListener {
-                Log.e("startDiscovering", "error!", it)
-            }
-        stopDiscovering = {
-            connectionsClient.stopDiscovery()
-            stopDiscovering = null
-            _connectionsState.value = _connectionsState.value.copy(
-                status = "idle"
-            )
-        }
-    }
-
-    private fun addDiscoveredEndpoint(
-        discoveredEndpointId: String,
-        endpointInfo: DiscoveredEndpointInfo,
-        connectionsClient: ConnectionsClient,
-    ) {
-        val discoveredEndpoint = DiscoveredEndpoint(
-            endpointId = discoveredEndpointId,
-            endpointInfo = endpointInfo,
-            connectionLifecycleCallback = getDefaultConnectionLifecycleCallback(connectionsClient),
-            onConnectionRequestSent = {
-                Log.d("Connection", "successfully sent connection request")
-                removeDiscoveredEndpoint(discoveredEndpointId)
-            },
-            onConnectionRequestFailure = {
-                Log.e("Connection", "failed to send connection request", it)
-                removeDiscoveredEndpoint(discoveredEndpointId)
-            },
-            connectionsClient = connectionsClient
-        )
-        _connectionsState.value = _connectionsState.value.copy(
-            discoveredEndpoints = _connectionsState.value.discoveredEndpoints + discoveredEndpoint
-        )
-    }
-
-    private fun removeDiscoveredEndpoint(endpointId: String) {
-        _connectionsState.value = _connectionsState.value.copy(
-            discoveredEndpoints = _connectionsState.value.discoveredEndpoints
-                .filter { it.endpointId != endpointId }
-        )
-    }
-
-    private fun addConnectionRequest(
-        endpointId: String,
-        connectionInfo: ConnectionInfo,
-        connectionsClient: ConnectionsClient,
-    ) {
-        Log.d("addConnectionRequest", "adding connection request")
-        Log.d("addConnectionRequest", "endpointId is $endpointId")
-        Log.d("addConnectionRequest", "auth digits are ${connectionInfo.authenticationDigits}")
-        val connectionRequest = ConnectionRequest(
-            endpointId = endpointId,
-            connectionInfo = connectionInfo,
-            payloadCallback = object : PayloadCallback() {
-                override fun onPayloadReceived(endpointId: String, payload: Payload) {
-                    Log.d("NearbyConnections", "payload received from endpoint $endpointId")
-                    if (payload.type == Payload.Type.BYTES) {
-                        payload.asBytes()?.let { receivedBytes ->
-                            val message = String(receivedBytes, Charsets.UTF_8)
-                            addMessage("$endpointId: $message")
-                        }
-                    }
-                }
-                override fun onPayloadTransferUpdate(p0: String, p1: PayloadTransferUpdate) {
-                    Log.d("NearbyConnections", "onPayloadTransferUpdate")
-                }
-            },
-            connectionsClient = connectionsClient
-        )
-        _connectionsState.value = _connectionsState.value.copy(
-            connectionRequests = _connectionsState.value.connectionRequests + connectionRequest
-        )
-        Log.d("addConnectionRequest", "added connection request")
-    }
-
-    private fun removeConnectionRequest(endpointId: String) {
-        _connectionsState.value = _connectionsState.value.copy(
-            connectionRequests = _connectionsState.value.connectionRequests
-                .filter { it.endpointId != endpointId }
-        )
-    }
-
-    private fun getDefaultConnectionLifecycleCallback(
-        connectionsClient: ConnectionsClient
-    ) = object : ConnectionLifecycleCallback() {
-        override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            Log.d("ConnectionLifecycleCallback", "onConnectionInitiated ($endpointId)")
-            addConnectionRequest(
-                endpointId = endpointId,
-                connectionInfo = info,
-                connectionsClient = connectionsClient
-            )
-        }
-        override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            when (result.status.statusCode) {
-                ConnectionsStatusCodes.STATUS_OK -> {
-                    Log.d("ConnectionLifecycleCallback", "connected to $endpointId!")
-                    removeConnectionRequest(endpointId)
-                    addRunningConnection(
-                        endpointId = endpointId,
-                        connectionsClient = connectionsClient
-                    )
-                    sendMessage = { msg ->
-                        val payload = Payload.fromBytes(msg.toByteArray(Charsets.UTF_8))
-                        connectionsClient
-                            .sendPayload(endpointId, payload)
-                            .addOnSuccessListener {
-                                Log.d("ConnectionLifecycleCallback", "successfully sent a message")
-                                addMessage("you: $msg")
-                            }
-                            .addOnFailureListener {
-                                Log.e("ConnectionLifecycleCallback", "could not send a message", it)
-                            }
-                    }
-                }
-                ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
-                    Log.d("ConnectionLifecycleCallback", "connection to $endpointId rejected")
-                    removeConnectionRequest(endpointId)
-                }
-                ConnectionsStatusCodes.STATUS_ERROR -> {
-                    Log.d("ConnectionLifecycleCallback", "connection status error")
-                }
-                else -> {
-                    Log.d("ConnectionLifecycleCallback", "unknown status code")
-                }
-            }
-        }
-        override fun onDisconnected(endpointId: String) {
-            Log.d("ConnectionLifecycleCallback", "onDisconnected from $endpointId!")
-            removeRunningConnection(endpointId)
-            sendMessage = {}
-        }
-    }
-
-    private fun addRunningConnection(
-        endpointId: String,
-        connectionsClient: ConnectionsClient
-    ) {
-        val runningConnection = RunningConnection(
-            endpointId = endpointId,
-            connectionsClient = connectionsClient
-        )
-        _connectionsState.value = _connectionsState.value.copy(
-            runningConnections = _connectionsState.value.runningConnections + runningConnection
-        )
-    }
-
-    private fun removeRunningConnection(endpointId: String) {
-        _connectionsState.value = _connectionsState.value.copy(
-            runningConnections = _connectionsState.value.runningConnections
-                .filter { it.endpointId != endpointId }
-        )
-    }
-
-    private fun addMessage(msg: String) {
-        _connectionsState.value = _connectionsState.value.copy(
-            messages = _connectionsState.value.messages + msg
-        )
-    }
-}
-
-data class NearbyConnectionsState(
-    val status: String,
-    val discoveredEndpoints: List<DiscoveredEndpoint>,
-    val connectionRequests: List<ConnectionRequest>,
-    val runningConnections: List<RunningConnection>,
-    val messages: List<String>,
-)
-
-class DiscoveredEndpoint(
-    val endpointId: String,
-    val endpointInfo: DiscoveredEndpointInfo,
-    private val connectionLifecycleCallback: ConnectionLifecycleCallback,
-    private val onConnectionRequestSent: () -> Unit,
-    private val onConnectionRequestFailure: (Exception) -> Unit,
-    private val connectionsClient: ConnectionsClient,
-) {
-    fun initiateConnection() {
-        connectionsClient
-            .requestConnection(
-                "discoverer",
-                endpointId,
-                connectionLifecycleCallback
-            )
-            .addOnSuccessListener{
-                onConnectionRequestSent()
-            }
-            .addOnFailureListener {
-                onConnectionRequestFailure(it)
-            }
-    }
-}
-
-class ConnectionRequest(
-    val endpointId: String,
-    val connectionInfo: ConnectionInfo,
-    private val payloadCallback: PayloadCallback,
-    private val connectionsClient: ConnectionsClient,
-) {
-
-    init {
-        Log.d("ConnectionRequest", "init")
-    }
-
-    fun accept() {
-        connectionsClient.acceptConnection(endpointId, payloadCallback)
-    }
-
-    fun reject() {
-        connectionsClient.rejectConnection(endpointId)
-    }
-}
-
-class RunningConnection(
-    val endpointId: String,
-    private val connectionsClient: ConnectionsClient,
-) {
-    fun disconnect() {
-        connectionsClient.disconnectFromEndpoint(endpointId)
-    }
-}
-
 private fun pickRequiredPermissions(
     sdkVersion: Int,
     permissionsWithVersions: List<Pair<String, IntRange>>
@@ -703,6 +367,10 @@ private fun pickRequiredPermissions(
         }
     }
     return requiredPermissions
+}
+
+enum class ContentDisplayMode {
+    SINGLE_COLUMN, DUAL_COLUMN
 }
 
 data class PlaybackStartOptions(
