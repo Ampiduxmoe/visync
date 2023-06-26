@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface BasicVisyncNearbyConnectionsState {
     val connectionsState: StateFlow<NearbyConnectionsState>
+    val eventListener: VisyncNearbyConnectionsListener
+    fun setEventListener(listener: VisyncNearbyConnectionsListener)
 }
 
 data class NearbyConnectionsState (
@@ -13,12 +15,23 @@ data class NearbyConnectionsState (
     override val discoveredEndpoints: List<DiscoveredEndpoint>,
     override val connectionRequests: List<ConnectionRequest>,
     override val runningConnections: List<RunningConnection>,
-    override val messages: List<String>,
 ) : AdvertiserState, DiscovererState {
     override val isAdvertising: Boolean
         get() = status == ConnectionStatus.ADVERTISING
     override val isDiscovering: Boolean
         get() = status == ConnectionStatus.DISCOVERING
+}
+
+open class VisyncNearbyConnectionsListener(
+
+) : VisyncAdvertiserListener, VisyncDiscovererListener {
+    fun onStatusChanged(status: ConnectionStatus) { }
+    override fun onIsAdvertisingChanged(isAdvertising: Boolean) { }
+    override fun onIsDiscoveringChanged(isDiscovering: Boolean) { }
+    override fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint) { }
+    override fun onNewConnectionRequest(request: ConnectionRequest) { }
+    override fun onNewRunningConnection(connection: RunningConnection) { }
+    override fun onNewMessage(message: String, from: RunningConnection) { }
 }
 
 interface DiscoveredEndpoint {

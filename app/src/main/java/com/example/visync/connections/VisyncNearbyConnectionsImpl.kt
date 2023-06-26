@@ -26,18 +26,24 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
     VisyncNearbyConnectionsAdvertiser,
     VisyncNearbyConnectionsDiscoverer {
 
-    private val _connectionsState = MutableStateFlow(
-        NearbyConnectionsState(
-            status = ConnectionStatus.IDLE,
-            discoveredEndpoints = listOf(),
-            connectionRequests = listOf(),
-            runningConnections = listOf(),
-            messages = listOf()
-        )
+    private val cleanConnectionsState = NearbyConnectionsState(
+        status = ConnectionStatus.IDLE,
+        discoveredEndpoints = listOf(),
+        connectionRequests = listOf(),
+        runningConnections = listOf(),
     )
+
+    private val _connectionsState = MutableStateFlow(cleanConnectionsState)
     override val connectionsState: StateFlow<NearbyConnectionsState> = _connectionsState
     override val advertiserState: StateFlow<AdvertiserState> = _connectionsState
     override val discovererState: StateFlow<DiscovererState> = _connectionsState
+
+    override var eventListener: VisyncNearbyConnectionsListener = VisyncNearbyConnectionsListener()
+        private set
+    override var advertiserEventListener: VisyncAdvertiserListener = eventListener
+        private set
+    override var discovererEventListener: VisyncDiscovererListener = eventListener
+        private set
 
     private var username = ""
     private val endpointUsernames = mutableMapOf<String, String>()
@@ -66,9 +72,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                     "NearbyConnectionsWrapper",
                     "Started advertising"
                 )
-                _connectionsState.value = _connectionsState.value.copy(
-                    status = ConnectionStatus.ADVERTISING
-                )
+                setStatus(ConnectionStatus.ADVERTISING)
             }
             .addOnFailureListener { exception ->
                 Log.e(
@@ -80,9 +84,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         _stopAdvertising = {
             connectionsClient.stopAdvertising()
             _stopAdvertising = null
-            _connectionsState.value = _connectionsState.value.copy(
-                status = ConnectionStatus.IDLE
-            )
+            setStatus(ConnectionStatus.IDLE)
         }
     }
 
@@ -109,9 +111,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                     "NearbyConnectionsWrapper",
                     "Started discovering"
                 )
-                _connectionsState.value = _connectionsState.value.copy(
-                    status = ConnectionStatus.DISCOVERING
-                )
+                setStatus(ConnectionStatus.DISCOVERING)
             }
             .addOnFailureListener { exception ->
                 Log.e(
@@ -123,9 +123,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         _stopDiscovering = {
             connectionsClient.stopDiscovery()
             _stopDiscovering = null
-            _connectionsState.value = _connectionsState.value.copy(
-                status = ConnectionStatus.IDLE
-            )
+            setStatus(ConnectionStatus.IDLE)
         }
     }
 
@@ -133,8 +131,36 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         _stopDiscovering?.invoke()
     }
 
+    override fun stop() {
+        stopAdvertising()
+        stopDiscovering()
+        connectionsClient.stopAllEndpoints()
+        _connectionsState.value = cleanConnectionsState
+    }
+
     private fun sendMessage(msg: String, receiver: RunningConnection) {
         _sendMessage?.invoke(msg, receiver)
+    }
+
+    private fun setStatus(status: ConnectionStatus) {
+        val oldStatus = _connectionsState.value.status
+        if (oldStatus == status) {
+            return
+        }
+        _connectionsState.value = _connectionsState.value.copy(
+            status = status
+        )
+        eventListener.onStatusChanged(status)
+        if (oldStatus == ConnectionStatus.ADVERTISING || status == ConnectionStatus.ADVERTISING) {
+            advertiserEventListener.onIsAdvertisingChanged(
+                isAdvertising = status == ConnectionStatus.ADVERTISING
+            )
+        }
+        if (oldStatus == ConnectionStatus.DISCOVERING || status == ConnectionStatus.DISCOVERING) {
+            discovererEventListener.onIsDiscoveringChanged(
+                isDiscovering = status == ConnectionStatus.DISCOVERING
+            )
+        }
     }
 
     private fun addDiscoveredEndpoint(
@@ -150,6 +176,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         _connectionsState.value = _connectionsState.value.copy(
             discoveredEndpoints = _connectionsState.value.discoveredEndpoints + discoveredEndpoint
         )
+        eventListener.onNewDiscoveredEndpoint(discoveredEndpoint)
     }
 
     private fun removeDiscoveredEndpoint(endpointId: String) {
@@ -171,6 +198,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         _connectionsState.value = _connectionsState.value.copy(
             connectionRequests = _connectionsState.value.connectionRequests + connectionRequest
         )
+        eventListener.onNewConnectionRequest(connectionRequest)
     }
 
     private fun removeConnectionRequest(endpointId: String) {
@@ -190,18 +218,13 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         _connectionsState.value = _connectionsState.value.copy(
             runningConnections = _connectionsState.value.runningConnections + runningConnection
         )
+        eventListener.onNewRunningConnection(runningConnection)
     }
 
     private fun removeRunningConnection(endpointId: String) {
         _connectionsState.value = _connectionsState.value.copy(
             runningConnections = _connectionsState.value.runningConnections
                 .filter { it.endpointId != endpointId }
-        )
-    }
-
-    private fun addMessage(msg: String) {
-        _connectionsState.value = _connectionsState.value.copy(
-            messages = _connectionsState.value.messages + msg
         )
     }
 
@@ -238,7 +261,6 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                                     "NearbyConnectionsWrapper",
                                     "Successfully sent a message ($trimmedMsg$maybeThreeDots)"
                                 )
-                                addMessage("You: $msg")
                             }
                             .addOnFailureListener { exception ->
                                 Log.e(
@@ -299,6 +321,50 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         }
     }
 
+    override fun setEventListener(listener: VisyncNearbyConnectionsListener) {
+        eventListener = listener
+    }
+
+    override fun setEventListener(listener: VisyncAdvertiserListener) {
+        setEventListener(object : VisyncNearbyConnectionsListener() {
+
+            override fun onIsAdvertisingChanged(isAdvertising: Boolean)
+                    = listener.onIsAdvertisingChanged(isAdvertising)
+
+            override fun onNewConnectionRequest(request: ConnectionRequest)
+                    = listener.onNewConnectionRequest(request)
+
+            override fun onNewRunningConnection(connection: RunningConnection)
+                    = listener.onNewRunningConnection(connection)
+
+            override fun onNewMessage(message: String, from: RunningConnection)
+                    = listener.onNewMessage(message, from)
+        })
+    }
+
+    fun asAdvertiser(): VisyncNearbyConnectionsAdvertiser = this
+    fun asDiscoverer(): VisyncNearbyConnectionsDiscoverer = this
+
+    override fun setEventListener(listener: VisyncDiscovererListener) {
+        setEventListener(object : VisyncNearbyConnectionsListener() {
+
+            override fun onIsDiscoveringChanged(isDiscovering: Boolean)
+                    = listener.onIsDiscoveringChanged(isDiscovering)
+
+            override fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint)
+                    = listener.onNewDiscoveredEndpoint((endpoint))
+
+            override fun onNewConnectionRequest(request: ConnectionRequest)
+                    = listener.onNewConnectionRequest(request)
+
+            override fun onNewRunningConnection(connection: RunningConnection)
+                    = listener.onNewRunningConnection(connection)
+
+            override fun onNewMessage(message: String, from: RunningConnection)
+                    = listener.onNewMessage(message, from)
+        })
+    }
+
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             Log.d(
@@ -314,7 +380,9 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                         "NearbyConnections",
                         "Received message: $trimmedMsg$maybeThreeDots"
                     )
-                    addMessage("$endpointId: $msg")
+                    val from = connectionsState.value.runningConnections
+                        .find { it.endpointId == endpointId }!!
+                    eventListener.onNewMessage(msg, from)
                 }
             }
         }

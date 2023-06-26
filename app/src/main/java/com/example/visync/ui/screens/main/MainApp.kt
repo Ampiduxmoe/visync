@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -29,6 +30,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +44,9 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.connections.RunningConnection
+import com.example.visync.connections.VisyncNearbyConnectionsImpl
+import com.example.visync.connections.VisyncNearbyConnectionsListener
 import com.example.visync.data.playlists.PlaylistWithVideofiles
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.MainAppNavigation
@@ -50,7 +55,7 @@ import com.example.visync.ui.screens.main.playlists.PlaylistsScreen
 import com.example.visync.ui.screens.main.playlists.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.main.rooms.RoomsScreen
 import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
-import com.example.visync.ui.screens.player.PlaybackSetupViewModel
+import com.google.android.gms.nearby.Nearby
 
 @Composable
 fun MainApp(
@@ -112,6 +117,7 @@ fun MainApp(
                             }!! // since videofile always belongs to a playlist
                         val videofileIndex = parentPlaylistWithVideofiles.videofiles
                             .indexOf(videofile)
+
                         val playbackStartOptions = PlaybackStartOptions(
                             playlist = parentPlaylistWithVideofiles,
                             startFrom = videofileIndex,
@@ -207,12 +213,31 @@ fun MainApp(
                 }
             }
             composable("testNearbyConnections") {
-                val nearbyConnectionsViewModel = hiltViewModel<PlaybackSetupViewModel>()
-                val connectionsWrapper = nearbyConnectionsViewModel.visyncNearbyConnectionsImpl
+                val context = LocalContext.current
+                val connectionsWrapper = VisyncNearbyConnectionsImpl(
+                    Nearby.getConnectionsClient(context)
+                )
+                val messages = remember { mutableStateOf(listOf<String>()) }
+                connectionsWrapper.setEventListener(object : VisyncNearbyConnectionsListener() {
+                    override fun onNewMessage(message: String, from: RunningConnection) {
+                        if (message == "playback start") {
+                            Toast.makeText(
+                                /* context = */ context,
+                                /* text = */ "playback started!",
+                                /* duration = */ Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        messages.value += "${from.endpointUsername}: $message"
+                    }
+                })
                 val nearbyConnectionsState by connectionsWrapper
                     .connectionsState.collectAsStateWithLifecycle()
                 val username = mainAppNavigationUiState.editableUsername.value
-                val context = LocalContext.current
+                DisposableEffect(Unit) {
+                    onDispose {
+                        connectionsWrapper.stop()
+                    }
+                }
                 Column(modifier = Modifier.fillMaxSize()) {
                     Text("current status = ${nearbyConnectionsState.status}")
                     Row(
@@ -281,6 +306,7 @@ fun MainApp(
                             val connection = nearbyConnectionsState.runningConnections.firstOrNull()
                             connection?.let {
                                 connection.sendMessage(currentMessage.value)
+                                messages.value += "you: ${currentMessage.value}"
                                 currentMessage.value = ""
                             }
                         }
@@ -292,7 +318,7 @@ fun MainApp(
                             .fillMaxWidth()
                             .height(128.dp)
                     ) {
-                        items(nearbyConnectionsState.messages) {msg ->
+                        items(messages.value) {msg ->
                             Text(msg)
                         }
                     }

@@ -33,8 +33,9 @@ class AppNavigationActions(private val navController: NavHostController) {
 }
 
 val TOP_LEVEL_DESTINATIONS = listOf(
+    TopLevelRoute.MainApp,
+    TopLevelRoute.PlaybackSetup,
     TopLevelRoute.Player,
-    TopLevelRoute.MainApp
 )
 
 /**
@@ -69,6 +70,9 @@ sealed class TopLevelRoute(
 ) {
     object MainApp : TopLevelRoute(
         routeString = "mainApp"
+    )
+    object PlaybackSetup : TopLevelRoute(
+        routeString = "playback_setup"
     )
     object Player : TopLevelRoute(
         routeString = "player"

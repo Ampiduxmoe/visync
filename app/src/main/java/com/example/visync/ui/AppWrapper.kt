@@ -19,6 +19,9 @@ import com.example.visync.ui.components.navigation.AppNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
 import com.example.visync.ui.screens.main.MainAppViewModel
+import com.example.visync.ui.screens.main.VisyncPlaybackMode
+import com.example.visync.ui.screens.player.PlaybackSetupScreen
+import com.example.visync.ui.screens.player.PlaybackSetupViewModel
 import com.example.visync.ui.screens.player.VisyncPlayer
 import com.example.visync.ui.screens.player.VisyncPlayerViewModel
 
@@ -38,6 +41,13 @@ fun AppWrapper(
     mainAppViewModel.initializeNavigationUiState(context)
     val sideNavigationUiState by mainAppViewModel
         .mainAppNavigationUiState.collectAsStateWithLifecycle()
+
+    val playbackSetupViewModel = hiltViewModel<PlaybackSetupViewModel>()
+    val playbackSetupState by playbackSetupViewModel
+        .playbackSetupState.collectAsStateWithLifecycle()
+    val playbackSetupConnections = playbackSetupViewModel.visyncNearbyConnections
+    val playbackSetupConnectionsState by playbackSetupConnections
+        .connectionsState.collectAsStateWithLifecycle()
 
     val visyncPlayerViewModel = hiltViewModel<VisyncPlayerViewModel>()
     val visyncPlayerUiState by visyncPlayerViewModel
@@ -73,7 +83,35 @@ fun AppWrapper(
                         videofilesToPlay = options.playlist.videofiles,
                         startFrom = options.startFrom
                     )
+                    when (options.playbackMode) {
+                        VisyncPlaybackMode.ALONE -> {
+                            topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
+                        }
+                        VisyncPlaybackMode.GROUP -> {
+                            val connectionsAdvertiser = playbackSetupViewModel.connectionsAdvertiser
+                            val advertiserState = connectionsAdvertiser.advertiserState.value
+                            if (!advertiserState.isAdvertising) {
+                                val username = sideNavigationUiState.editableUsername.value
+                                connectionsAdvertiser.startAdvertising(username, context)
+                            }
+                            topLevelNavigationActions.navigateTo(TopLevelRoute.PlaybackSetup.routeString)
+                        }
+                    }
+                }
+            )
+        }
+        composable(
+            route = TopLevelRoute.PlaybackSetup.routeString,
+            enterTransition = { fadeIn(snap(transitionDelayMillis)) },
+            exitTransition = { ExitTransition.None }
+        ) {
+            PlaybackSetupScreen(
+                playbackSetupState = playbackSetupState,
+                connectedUsers = playbackSetupConnectionsState.runningConnections,
+                startPlaying = {
+                    playbackSetupViewModel.sendPlaybackStartMessage()
                     topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
+                    playbackSetupViewModel.connectionsAdvertiser.stopAdvertising()
                 }
             )
         }
@@ -90,6 +128,7 @@ fun AppWrapper(
                 hideOverlay = visyncPlayerViewModel::hideOverlay,
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
+                    playbackSetupViewModel.connectionsAdvertiser.stop()
                 },
                 player = visyncPlayerViewModel.playerWrapper.getPlayer()
             )
