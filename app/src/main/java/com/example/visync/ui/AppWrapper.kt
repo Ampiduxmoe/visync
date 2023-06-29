@@ -94,6 +94,7 @@ fun AppWrapper(
                                 val username = sideNavigationUiState.editableUsername.value
                                 connectionsAdvertiser.startAdvertising(username, context)
                             }
+                            playbackSetupViewModel.allowSetupEditing()
                             topLevelNavigationActions.navigateTo(TopLevelRoute.PlaybackSetup.routeString)
                         }
                     }
@@ -108,10 +109,13 @@ fun AppWrapper(
             PlaybackSetupScreen(
                 playbackSetupState = playbackSetupState,
                 connectedUsers = playbackSetupConnectionsState.runningConnections,
-                startPlaying = {
-                    playbackSetupViewModel.sendPlaybackStartMessage()
-                    topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
-                    playbackSetupViewModel.connectionsAdvertiser.stopAdvertising()
+                openPlayer = {
+                    val isUserHosting = playbackSetupState.canChangePlaybackSettings
+                    if (isUserHosting) {
+                        playbackSetupViewModel.sendOpenPlayer()
+                        topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
+                        playbackSetupViewModel.connectionsAdvertiser.stopAdvertising()
+                    }
                 }
             )
         }

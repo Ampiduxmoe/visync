@@ -50,7 +50,6 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
 
     private var _stopAdvertising: (() -> Unit)? = null
     private var _stopDiscovering: (() -> Unit)? = null
-    private var _sendMessage: ((msg: String, to: RunningConnection) -> Unit)? = null
 
     override fun startAdvertising(username: String, context: Context) {
         if (_stopAdvertising != null || _stopDiscovering != null) {
@@ -83,6 +82,10 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             }
         _stopAdvertising = {
             connectionsClient.stopAdvertising()
+            Log.d(
+                "NearbyConnectionsWrapper",
+                "Stopped discovering"
+            )
             _stopAdvertising = null
             setStatus(ConnectionStatus.IDLE)
         }
@@ -122,6 +125,10 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             }
         _stopDiscovering = {
             connectionsClient.stopDiscovery()
+            Log.d(
+                "NearbyConnectionsWrapper",
+                "Stopped discovering"
+            )
             _stopDiscovering = null
             setStatus(ConnectionStatus.IDLE)
         }
@@ -131,15 +138,55 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         _stopDiscovering?.invoke()
     }
 
+    private fun sendMessage(msg: String, receiver: RunningConnection) {
+        val payload = Payload.fromBytes(msg.toByteArray(Charsets.UTF_8))
+        connectionsClient
+            .sendPayload(receiver.endpointId, payload)
+            .addOnSuccessListener {
+                val trimmedMsg = msg.substring(0, 20.coerceAtMost(msg.length))
+                val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
+                Log.d(
+                    "NearbyConnectionsWrapper",
+                    "Successfully sent a message [$trimmedMsg$maybeThreeDots] " +
+                            "to ${receiver.endpointId} (${receiver.endpointUsername})"
+                )
+            }
+            .addOnFailureListener { exception ->
+                Log.e(
+                    "NearbyConnectionsWrapper",
+                    "Could not send a message",
+                    exception
+                )
+            }
+    }
+
+    override fun sendMessageToMultiple(msg: String, receivers: List<RunningConnection>) {
+        val receiverIds = receivers.map { it.endpointId }
+        val payload = Payload.fromBytes(msg.toByteArray(Charsets.UTF_8))
+        connectionsClient
+            .sendPayload(receiverIds, payload)
+            .addOnSuccessListener {
+                val trimmedMsg = msg.substring(0, 20.coerceAtMost(msg.length))
+                val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
+                Log.d(
+                    "NearbyConnectionsWrapper",
+                    "Successfully sent a multicast message [$trimmedMsg$maybeThreeDots]"
+                )
+            }
+            .addOnFailureListener { exception ->
+                Log.e(
+                    "NearbyConnectionsWrapper",
+                    "Could not send a message",
+                    exception
+                )
+            }
+    }
+
     override fun stop() {
         stopAdvertising()
         stopDiscovering()
         connectionsClient.stopAllEndpoints()
         _connectionsState.value = cleanConnectionsState
-    }
-
-    private fun sendMessage(msg: String, receiver: RunningConnection) {
-        _sendMessage?.invoke(msg, receiver)
     }
 
     private fun setStatus(status: ConnectionStatus) {
@@ -244,31 +291,12 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                 ConnectionsStatusCodes.STATUS_OK -> {
                     Log.d(
                         "NearbyConnectionsWrapper",
-                        "Connected to $endpointId! (${endpointUsernames[endpointId]})"
+                        "Connected to $endpointId (${endpointUsernames[endpointId]})"
                     )
                     removeConnectionRequest(endpointId)
                     addRunningConnection(
                         endpointId = endpointId
                     )
-                    _sendMessage = { msg, runningConnection ->
-                        val payload = Payload.fromBytes(msg.toByteArray(Charsets.UTF_8))
-                        connectionsClient
-                            .sendPayload(runningConnection.endpointId, payload)
-                            .addOnSuccessListener {
-                                val trimmedMsg = msg.substring(0, 20.coerceAtMost(msg.length))
-                                val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
-                                Log.d(
-                                    "NearbyConnectionsWrapper",
-                                    "Successfully sent a message ($trimmedMsg$maybeThreeDots)"
-                                )
-                            }
-                            .addOnFailureListener { exception ->
-                                Log.e(
-                                    "NearbyConnectionsWrapper",
-                                    "could not send a message", exception
-                                )
-                            }
-                    }
                 }
                 ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
                     Log.d(
@@ -297,7 +325,6 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                 "Disconnected from $endpointId (${endpointUsernames[endpointId]})"
             )
             removeRunningConnection(endpointId)
-            _sendMessage = null
         }
     }
 

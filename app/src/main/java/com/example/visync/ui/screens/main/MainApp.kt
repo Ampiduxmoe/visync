@@ -34,6 +34,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -55,7 +56,12 @@ import com.example.visync.ui.screens.main.playlists.PlaylistsScreen
 import com.example.visync.ui.screens.main.playlists.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.main.rooms.RoomsScreen
 import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
+import com.example.visync.ui.screens.player.OpenPlayerMessage
+import com.example.visync.ui.screens.player.TextMessage
+import com.example.visync.ui.screens.player.VisyncMessage
 import com.google.android.gms.nearby.Nearby
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 @Composable
 fun MainApp(
@@ -219,10 +225,12 @@ fun MainApp(
                         Nearby.getConnectionsClient(context)
                     )
                 }
-                val messages = remember { mutableStateOf(listOf<String>()) }
+                val messages = rememberSaveable { mutableStateOf(listOf<String>()) }
+                val jsonIgnoreUnknownKeys = remember { Json { ignoreUnknownKeys = true } }
                 connectionsWrapper.setEventListener(object : VisyncNearbyConnectionsListener() {
                     override fun onNewMessage(message: String, from: RunningConnection) {
-                        if (message == "playback start") {
+                        val visyncMessage = jsonIgnoreUnknownKeys.decodeFromString<VisyncMessage>(message)
+                        if (visyncMessage.type == OpenPlayerMessage::class.simpleName!!) {
                             Toast.makeText(
                                 /* context = */ context,
                                 /* text = */ "playback started!",
@@ -307,7 +315,9 @@ fun MainApp(
                         onClick = {
                             val connection = nearbyConnectionsState.runningConnections.firstOrNull()
                             connection?.let {
-                                connection.sendMessage(currentMessage.value)
+                                val textMessage = TextMessage(currentMessage.value)
+                                val encodedMessage = Json.encodeToString(textMessage)
+                                connection.sendMessage(encodedMessage)
                                 messages.value += "you: ${currentMessage.value}"
                                 currentMessage.value = ""
                             }

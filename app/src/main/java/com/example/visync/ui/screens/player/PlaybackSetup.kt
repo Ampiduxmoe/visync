@@ -12,13 +12,15 @@ import com.example.visync.connections.RunningConnection
 fun PlaybackSetupScreen(
     playbackSetupState: PlaybackSetupState,
     connectedUsers: List<RunningConnection>,
-    startPlaying: () -> Unit,
+    openPlayer: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = "start playback",
-            modifier = Modifier.clickable { startPlaying() }
-        )
+        if (playbackSetupState.canChangePlaybackSettings) {
+            Text(
+                text = "start playback",
+                modifier = Modifier.clickable { openPlayer() }
+            )
+        }
         Text("connected users:")
         for (connection in connectedUsers) {
             Text(connection.endpointUsername)

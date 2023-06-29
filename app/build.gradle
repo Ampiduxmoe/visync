@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.android'
     id 'com.google.dagger.hilt.android'
     id 'kotlin-kapt'
+    id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 android {
@@ -49,6 +50,9 @@ android {
 }
 
 dependencies {
+    // serialization
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1'
+
     // nearby connections
     implementation 'com.google.android.gms:play-services-nearby:18.5.0'
 

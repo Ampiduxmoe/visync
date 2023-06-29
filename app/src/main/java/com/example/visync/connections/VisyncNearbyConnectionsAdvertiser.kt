@@ -8,6 +8,7 @@ interface VisyncNearbyConnectionsAdvertiser {
     val advertiserEventListener: VisyncAdvertiserListener
     fun startAdvertising(username: String, context: Context)
     fun stopAdvertising()
+    fun sendMessageToMultiple(msg: String, receivers: List<RunningConnection>)
     fun setEventListener(listener: VisyncAdvertiserListener)
     fun stop()
 }
