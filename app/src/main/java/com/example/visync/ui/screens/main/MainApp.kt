@@ -214,9 +214,11 @@ fun MainApp(
             }
             composable("testNearbyConnections") {
                 val context = LocalContext.current
-                val connectionsWrapper = VisyncNearbyConnectionsImpl(
-                    Nearby.getConnectionsClient(context)
-                )
+                val connectionsWrapper = remember {
+                    VisyncNearbyConnectionsImpl(
+                        Nearby.getConnectionsClient(context)
+                    )
+                }
                 val messages = remember { mutableStateOf(listOf<String>()) }
                 connectionsWrapper.setEventListener(object : VisyncNearbyConnectionsListener() {
                     override fun onNewMessage(message: String, from: RunningConnection) {
