@@ -14,17 +14,17 @@ interface VisyncNearbyConnections :
 }
 
 interface BasicVisyncNearbyConnectionsState {
-    val connectionsState: StateFlow<NearbyConnectionsState>
+    val connectionsState: StateFlow<VisyncNearbyConnectionsState>
     val eventListener: VisyncNearbyConnectionsListener
     fun setEventListener(listener: VisyncNearbyConnectionsListener)
 }
 
-data class NearbyConnectionsState (
+data class VisyncNearbyConnectionsState (
     val status: ConnectionStatus,
     override val discoveredEndpoints: List<DiscoveredEndpoint>,
     override val connectionRequests: List<ConnectionRequest>,
     override val runningConnections: List<RunningConnection>,
-) : AdvertiserState, DiscovererState {
+) : VisyncAdvertiserState, VisyncDiscovererState {
     override val isAdvertising: Boolean
         get() = status == ConnectionStatus.ADVERTISING
     override val isDiscovering: Boolean

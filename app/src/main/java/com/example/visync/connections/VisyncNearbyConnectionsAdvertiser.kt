@@ -4,7 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.flow.StateFlow
 
 interface VisyncNearbyConnectionsAdvertiser {
-    val advertiserState: StateFlow<AdvertiserState>
+    val advertiserState: StateFlow<VisyncAdvertiserState>
     val advertiserEventListener: VisyncAdvertiserListener
     fun startAdvertising(username: String, context: Context)
     fun stopAdvertising()
@@ -13,7 +13,7 @@ interface VisyncNearbyConnectionsAdvertiser {
     fun reset()
 }
 
-interface AdvertiserState {
+interface VisyncAdvertiserState {
     val isAdvertising: Boolean
     val connectionRequests: List<ConnectionRequest>
     val runningConnections: List<RunningConnection>

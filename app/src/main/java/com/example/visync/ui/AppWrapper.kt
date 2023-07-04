@@ -1,5 +1,6 @@
 package com.example.visync.ui
 
+import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.snap
@@ -16,11 +17,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.connections.DiscoveredEndpoint
+import com.example.visync.connections.VisyncNearbyConnectionsState
+import com.example.visync.connections.VisyncNearbyConnections
 import com.example.visync.ui.components.navigation.AppNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
 import com.example.visync.ui.screens.main.MainAppViewModel
-import com.example.visync.ui.screens.main.RoomsDiscoveringOptions
+import com.example.visync.ui.screens.main.PlaybackStartOptions
+import com.example.visync.ui.screens.main.RoomDiscoveringOptions
 import com.example.visync.ui.screens.main.VisyncPlaybackMode
 import com.example.visync.ui.screens.player.PlaybackSetupScreen
 import com.example.visync.ui.screens.player.PlaybackSetupViewModel
@@ -32,6 +37,8 @@ import com.example.visync.ui.screens.player.VisyncPlayerViewModel
 fun AppWrapper(
     windowSize: WindowSizeClass,
 ) {
+    val context = LocalContext.current
+
     val topLevelNavController = rememberNavController()
     val topLevelNavigationActions = remember(topLevelNavController) {
         AppNavigationActions(topLevelNavController)
@@ -40,10 +47,11 @@ fun AppWrapper(
     val mainAppViewModel = hiltViewModel<MainAppViewModel>()
     val mainAppUiState by mainAppViewModel
         .uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    mainAppViewModel.initializeNavigationUiState(context)
     val sideNavigationUiState by mainAppViewModel
         .mainAppNavigationUiState.collectAsStateWithLifecycle()
+    if (sideNavigationUiState.editableUsername.value == mainAppViewModel.usernamePlaceholder) {
+        mainAppViewModel.initializeNavigationUiState(context)
+    }
 
     val playbackSetupViewModel = hiltViewModel<PlaybackSetupViewModel>()
     val playbackSetupState by playbackSetupViewModel
@@ -82,30 +90,23 @@ fun AppWrapper(
                 mainAppUiState = mainAppUiState,
                 mainAppNavigationUiState = sideNavigationUiState,
                 playPlaylist = { options ->
-                    visyncPlayerViewModel.setVideofilesToPlay(
-                        videofilesToPlay = options.playlist.videofiles,
-                        startFrom = options.startFrom
-                    )
-                    when (options.playbackMode) {
-                        VisyncPlaybackMode.ALONE -> {
-                            topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
-                        }
-                        VisyncPlaybackMode.GROUP -> {
-                            val connectionsAdvertiser = playbackSetupViewModel.connectionsAdvertiser
-                            val advertiserState = connectionsAdvertiser.advertiserState.value
-                            playbackSetupViewModel.fullResetToHostMode()
-                            if (!advertiserState.isAdvertising) {
-                                val username = sideNavigationUiState.editableUsername.value
-                                connectionsAdvertiser.startAdvertising(username, context)
-                            }
-                            topLevelNavigationActions.navigateTo(
-                                TopLevelRoute.PlaybackSetup.routeString
-                            )
-                        }
+                    if (options.playbackMode == VisyncPlaybackMode.ALONE) {
+                        topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
+                        return@MainApp
                     }
+                    transitionToPlaybackSetupAsHost(
+                        context = context,
+                        username = sideNavigationUiState.editableUsername.value,
+                        playbackStartOptions = options,
+                        topLevelNavigationActions = topLevelNavigationActions,
+                        visyncPlayerViewModel = visyncPlayerViewModel,
+                        playbackSetupViewModel = playbackSetupViewModel,
+                        playbackSetupConnections = playbackSetupConnections,
+                        playbackSetupConnectionsState = playbackSetupConnectionsState
+                    )
                 },
-                roomsDiscoveringOptions = RoomsDiscoveringOptions(
-                    startDiscovering = {
+                roomDiscoveringOptions = RoomDiscoveringOptions(
+                    startDiscoveringClean = {
                         val username = sideNavigationUiState.editableUsername.value
                         playbackSetupViewModel.fullResetToGuestMode()
                         playbackSetupConnections.startDiscovering(username, context)
@@ -114,18 +115,11 @@ fun AppWrapper(
                         playbackSetupConnections.stopDiscovering()
                     },
                     joinRoom = {
-                        playbackSetupViewModel.messageEvents.apply {
-                            onOpenPlayerMessage = {
-                                topLevelNavigationActions.navigateTo(
-                                    TopLevelRoute.Player.routeString
-                                )
-                            }
-                            onSetVideofilesMessage = {
-
-                            }
-                        }
-                        topLevelNavigationActions.navigateTo(TopLevelRoute.PlaybackSetup.routeString)
-                        it.initiateConnection()
+                        transitionToPlaybackSetupAsGuest(
+                            connectTo = it,
+                            topLevelNavigationActions = topLevelNavigationActions,
+                            playbackSetupViewModel = playbackSetupViewModel
+                        )
                     }
                 )
             )
@@ -169,10 +163,52 @@ fun AppWrapper(
                 hideOverlay = visyncPlayerViewModel::hideOverlay,
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
-                    playbackSetupViewModel.connectionsAdvertiser.reset()
+                    playbackSetupConnections.reset()
                 },
                 player = visyncPlayerViewModel.playerWrapper.getPlayer()
             )
         }
     }
+}
+
+fun transitionToPlaybackSetupAsHost(
+    context: Context,
+    username: String,
+    playbackStartOptions: PlaybackStartOptions,
+    topLevelNavigationActions: AppNavigationActions,
+    visyncPlayerViewModel: VisyncPlayerViewModel,
+    playbackSetupViewModel: PlaybackSetupViewModel,
+    playbackSetupConnections: VisyncNearbyConnections,
+    playbackSetupConnectionsState: VisyncNearbyConnectionsState,
+) {
+    visyncPlayerViewModel.setVideofilesToPlay(
+        videofilesToPlay = playbackStartOptions.videofiles,
+        startFrom = playbackStartOptions.startFrom
+    )
+    playbackSetupViewModel.fullResetToHostMode()
+    if (!playbackSetupConnectionsState.isAdvertising) {
+        playbackSetupConnections.startAdvertising(username, context)
+    }
+    topLevelNavigationActions.navigateTo(
+        TopLevelRoute.PlaybackSetup.routeString
+    )
+}
+
+fun transitionToPlaybackSetupAsGuest(
+    connectTo: DiscoveredEndpoint,
+    topLevelNavigationActions: AppNavigationActions,
+    playbackSetupViewModel: PlaybackSetupViewModel,
+) {
+    playbackSetupViewModel.messageEvents.apply {
+        onOpenPlayerMessage = {
+            topLevelNavigationActions.navigateTo(
+                TopLevelRoute.Player.routeString
+            )
+        }
+        onSetVideofilesMessage = {
+
+        }
+    }
+    topLevelNavigationActions.navigateTo(TopLevelRoute.PlaybackSetup.routeString)
+    connectTo.initiateConnection()
 }

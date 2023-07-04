@@ -50,7 +50,7 @@ import com.example.visync.connections.DiscoveredEndpoint
 import com.example.visync.connections.RunningConnection
 import com.example.visync.connections.VisyncNearbyConnections
 import com.example.visync.connections.VisyncNearbyConnectionsListener
-import com.example.visync.data.playlists.PlaylistWithVideofiles
+import com.example.visync.data.videofiles.Videofile
 import com.example.visync.messaging.JsonVisyncMessageConverter
 import com.example.visync.messaging.OpenPlayerMessage
 import com.example.visync.messaging.TextMessage
@@ -72,7 +72,7 @@ fun MainApp(
     mainAppUiState: MainAppUiState,
     mainAppNavigationUiState: MainAppNavigationUiState,
     playPlaylist: (PlaybackStartOptions) -> Unit,
-    roomsDiscoveringOptions: RoomsDiscoveringOptions,
+    roomDiscoveringOptions: RoomDiscoveringOptions,
 ) {
     val navigationType: NavigationType
     val preferredDisplayMode: ContentDisplayMode
@@ -127,10 +127,11 @@ fun MainApp(
                             }!! // since videofile always belongs to a playlist
                         val videofileIndex = parentPlaylistWithVideofiles.videofiles
                             .indexOf(videofile)
-
+                        // only select one for now
+                        val videofilesToPlay = listOf(videofile)
                         val playbackStartOptions = PlaybackStartOptions(
-                            playlist = parentPlaylistWithVideofiles,
-                            startFrom = videofileIndex,
+                            videofiles = videofilesToPlay,
+                            startFrom = 0,
                             playbackMode = VisyncPlaybackMode.GROUP
                         )
                         playPlaylist(playbackStartOptions)
@@ -143,15 +144,15 @@ fun MainApp(
                 val roomsUiState by roomsScreenViewModel
                     .uiState.collectAsStateWithLifecycle()
                 DisposableEffect(Unit) {
-                    roomsDiscoveringOptions.startDiscovering()
+                    roomDiscoveringOptions.startDiscoveringClean()
                     onDispose {
-                        roomsDiscoveringOptions.stopDiscovering()
+                        roomDiscoveringOptions.stopDiscovering()
                         roomsScreenViewModel.clearDiscoveredRooms()
                     }
                 }
                 RoomsScreen(
                     roomsUiState = roomsUiState,
-                    joinRoom = { roomsDiscoveringOptions.joinRoom(it) }
+                    joinRoom = { roomDiscoveringOptions.joinRoom(it) }
                 )
             }
             composable(Route.MyProfile.routeString) {
@@ -428,13 +429,13 @@ enum class ContentDisplayMode {
 }
 
 class PlaybackStartOptions(
-    val playlist: PlaylistWithVideofiles,
+    val videofiles: List<Videofile>,
     val startFrom: Int,
     val playbackMode: VisyncPlaybackMode,
 )
 
-class RoomsDiscoveringOptions(
-    val startDiscovering: () -> Unit,
+class RoomDiscoveringOptions(
+    val startDiscoveringClean: () -> Unit,
     val stopDiscovering: () -> Unit,
     val joinRoom: (DiscoveredEndpoint) -> Unit,
 )

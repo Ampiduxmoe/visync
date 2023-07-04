@@ -26,7 +26,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
     private val connectionsClient: ConnectionsClient,
 ) : VisyncNearbyConnections {
 
-    private val cleanConnectionsState = NearbyConnectionsState(
+    private val cleanConnectionsState = VisyncNearbyConnectionsState(
         status = ConnectionStatus.IDLE,
         discoveredEndpoints = listOf(),
         connectionRequests = listOf(),
@@ -34,9 +34,9 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
     )
 
     private val _connectionsState = MutableStateFlow(cleanConnectionsState)
-    override val connectionsState: StateFlow<NearbyConnectionsState> = _connectionsState
-    override val advertiserState: StateFlow<AdvertiserState> = _connectionsState
-    override val discovererState: StateFlow<DiscovererState> = _connectionsState
+    override val connectionsState: StateFlow<VisyncNearbyConnectionsState> = _connectionsState
+    override val advertiserState: StateFlow<VisyncAdvertiserState> = _connectionsState
+    override val discovererState: StateFlow<VisyncDiscovererState> = _connectionsState
 
     override var eventListener: VisyncNearbyConnectionsListener = VisyncNearbyConnectionsListener()
         private set

@@ -35,7 +35,8 @@ class PlaybackSetupViewModel @Inject constructor(
         endpointId = "",
         username = "",
         messagingVersion = messagingVersion,
-        isApproved = false
+        isApproved = false,
+        videofilesNotFound = false
     )
     private val playbackSetupStateDefault = PlaybackSetupState(
         setupMode = setupModeDefault,
@@ -51,46 +52,22 @@ class PlaybackSetupViewModel @Inject constructor(
 
     private var _setupMode
         get() = _playbackSetupState.value.setupMode
-        set(value) = _playbackSetupState.update { state ->
-            state.copy(
-                setupMode = value
-            )
-        }
+        set(value) = _playbackSetupState.update { it.copy(setupMode = value) }
     private var _isConnectingToHost
         get() = _playbackSetupState.value.isConnectingToHost
-        set(value) = _playbackSetupState.update { state ->
-            state.copy(
-                isConnectingToHost = value
-            )
-        }
+        set(value) = _playbackSetupState.update { it.copy(isConnectingToHost = value) }
     private var _connectionError
         get() = _playbackSetupState.value.connectionError
-        set(value) = _playbackSetupState.update { state ->
-            state.copy(
-                connectionError = value
-            )
-        }
+        set(value) = _playbackSetupState.update { it.copy(connectionError = value) }
     private var _hostAsWatcher
         get() = _playbackSetupState.value.hostAsWatcher
-        set(value) = _playbackSetupState.update { state ->
-            state.copy(
-                hostAsWatcher = value
-            )
-        }
+        set(value) = _playbackSetupState.update { it.copy(hostAsWatcher = value) }
     private var _meAsWatcher
         get() = _playbackSetupState.value.meAsWatcher
-        set(value) = _playbackSetupState.update { state ->
-            state.copy(
-                meAsWatcher = value
-            )
-        }
+        set(value) = _playbackSetupState.update { it.copy(meAsWatcher = value) }
     private var _otherWatchers
         get() = _playbackSetupState.value.otherWatchers
-        set(value) = _playbackSetupState.update { state ->
-            state.copy(
-                otherWatchers = value
-            )
-        }
+        set(value) = _playbackSetupState.update { it.copy(otherWatchers = value) }
 
     var messageEvents = getEmptyMessageEvents()
         private set
@@ -258,7 +235,8 @@ class PlaybackSetupViewModel @Inject constructor(
                         endpointId = sender.endpointId,
                         username = sender.username,
                         messagingVersion = fullMessage.version,
-                        isApproved = false
+                        isApproved = false,
+                        videofilesNotFound = false
                     ))
                 }
             }
@@ -359,6 +337,7 @@ data class Watcher(
     val username: String,
     val messagingVersion: Int,
     val isApproved: Boolean,
+    val videofilesNotFound: Boolean,
 )
 
 interface PlaybackSetupMessageEvents {

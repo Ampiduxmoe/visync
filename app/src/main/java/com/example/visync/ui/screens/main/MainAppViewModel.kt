@@ -8,6 +8,7 @@ import com.example.visync.ui.screens.settings.getProfilePreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 @HiltViewModel
@@ -22,10 +23,12 @@ class MainAppViewModel @Inject constructor(
     )
     val uiState: StateFlow<MainAppUiState> = _uiState
 
+    val usernamePlaceholder = "Loading..."
+
     private val _mainAppNavigationUiState = MutableStateFlow(
         MainAppNavigationUiState(
             editableUsername = EditableUsername(
-                value = "Loading...",
+                value = usernamePlaceholder,
                 isEditable = false,
                 enableEditing = this::enableUsernameEditing,
                 disableEditing = this::disableUsernameEditing,
@@ -36,6 +39,10 @@ class MainAppViewModel @Inject constructor(
     )
     val mainAppNavigationUiState: StateFlow<MainAppNavigationUiState> = _mainAppNavigationUiState
 
+    private var _editableUsername
+        get() = _mainAppNavigationUiState.value.editableUsername
+        set(value) = _mainAppNavigationUiState.update { it.copy(editableUsername = value) }
+
     init {
 
     }
@@ -44,53 +51,27 @@ class MainAppViewModel @Inject constructor(
         val profilePrefs = getProfilePreferences(context)
         val usernameKey = context.getString(R.string.prefs_profile_username)
         val username = profilePrefs.getString(usernameKey, null) ?: generateNickname()
-        updateUsernameState(
-            editableUsername = getUsernameState().copy(
-                value = username
-            )
-        )
+        _editableUsername = _editableUsername.copy(value = username)
         profilePrefs.edit().putString(usernameKey, username).apply()
     }
 
     fun enableUsernameEditing() {
-        updateUsernameState(
-            editableUsername = getUsernameState().copy(
-                isEditable = true
-            )
-        )
+        _editableUsername = _editableUsername.copy(isEditable = true)
     }
 
     fun disableUsernameEditing() {
-        updateUsernameState(
-            editableUsername = getUsernameState().copy(
-                isEditable = true
-            )
-        )
+        _editableUsername = _editableUsername.copy(isEditable = true)
     }
 
     fun setUsername(username: String) {
-        updateUsernameState(
-            editableUsername = getUsernameState().copy(
-                value = username
-            )
-        )
+        _editableUsername = _editableUsername.copy(value = username)
     }
 
     fun applyUsernameChanges(context: Context) {
         val profilePrefs = getProfilePreferences(context)
         val usernameKey = context.getString(R.string.prefs_profile_username)
-        val username = getUsernameState().value
+        val username = _editableUsername.value
         profilePrefs.edit().putString(usernameKey, username).apply()
-    }
-
-    private fun getUsernameState(): EditableUsername {
-        return _mainAppNavigationUiState.value.editableUsername
-    }
-
-    private fun updateUsernameState(editableUsername: EditableUsername) {
-        _mainAppNavigationUiState.value = _mainAppNavigationUiState.value.copy(
-            editableUsername = editableUsername
-        )
     }
 }
 

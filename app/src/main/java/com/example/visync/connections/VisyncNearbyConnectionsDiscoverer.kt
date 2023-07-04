@@ -4,7 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.flow.StateFlow
 
 interface VisyncNearbyConnectionsDiscoverer {
-    val discovererState: StateFlow<DiscovererState>
+    val discovererState: StateFlow<VisyncDiscovererState>
     val discovererEventListener: VisyncDiscovererListener
     fun startDiscovering(username: String, context: Context)
     fun stopDiscovering()
@@ -12,7 +12,7 @@ interface VisyncNearbyConnectionsDiscoverer {
     fun reset()
 }
 
-interface DiscovererState {
+interface VisyncDiscovererState {
     val isDiscovering: Boolean
     val discoveredEndpoints: List<DiscoveredEndpoint>
     val connectionRequests: List<ConnectionRequest>
