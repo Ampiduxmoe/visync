@@ -6,7 +6,7 @@ interface RoomsRepository {
 
     val rooms: StateFlow<List<Room>>
 
-    fun getRoom(id: Long): Room?
+    fun getRoom(endpointId: String): Room?
 
     fun tryAddRoom(room: Room): Boolean
 }

@@ -20,11 +20,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 
+private val maxLogMsgLength = 40
+
 class VisyncNearbyConnectionsImpl @Inject constructor(
     private val connectionsClient: ConnectionsClient,
-) : BasicVisyncNearbyConnectionsState,
-    VisyncNearbyConnectionsAdvertiser,
-    VisyncNearbyConnectionsDiscoverer {
+) : VisyncNearbyConnections {
 
     private val cleanConnectionsState = NearbyConnectionsState(
         status = ConnectionStatus.IDLE,
@@ -143,12 +143,12 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         connectionsClient
             .sendPayload(receiver.endpointId, payload)
             .addOnSuccessListener {
-                val trimmedMsg = msg.substring(0, 20.coerceAtMost(msg.length))
+                val trimmedMsg = msg.substring(0, maxLogMsgLength.coerceAtMost(msg.length))
                 val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
                 Log.d(
                     "NearbyConnectionsWrapper",
                     "Successfully sent a message [$trimmedMsg$maybeThreeDots] " +
-                            "to ${receiver.endpointId} (${receiver.endpointUsername})"
+                            "to ${receiver.endpointId} (${receiver.username})"
                 )
             }
             .addOnFailureListener { exception ->
@@ -161,12 +161,15 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
     }
 
     override fun sendMessageToMultiple(msg: String, receivers: List<RunningConnection>) {
+        if (receivers.isEmpty()) {
+            return
+        }
         val receiverIds = receivers.map { it.endpointId }
         val payload = Payload.fromBytes(msg.toByteArray(Charsets.UTF_8))
         connectionsClient
             .sendPayload(receiverIds, payload)
             .addOnSuccessListener {
-                val trimmedMsg = msg.substring(0, 20.coerceAtMost(msg.length))
+                val trimmedMsg = msg.substring(0, maxLogMsgLength.coerceAtMost(msg.length))
                 val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
                 Log.d(
                     "NearbyConnectionsWrapper",
@@ -182,7 +185,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             }
     }
 
-    override fun stop() {
+    override fun reset() {
         stopAdvertising()
         stopDiscovering()
         connectionsClient.stopAllEndpoints()
@@ -260,7 +263,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
     ) {
         val runningConnection = RunningConnectionImpl(
             endpointId = endpointId,
-            endpointUsername = endpointUsernames[endpointId]!! // we should have it by now
+            username = endpointUsernames[endpointId]!! // we should have it by now
         )
         _connectionsState.value = _connectionsState.value.copy(
             runningConnections = _connectionsState.value.runningConnections + runningConnection
@@ -269,10 +272,13 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
     }
 
     private fun removeRunningConnection(endpointId: String) {
+        val runningConnection = _connectionsState.value.runningConnections
+            .find { it.endpointId == endpointId } ?: return
         _connectionsState.value = _connectionsState.value.copy(
             runningConnections = _connectionsState.value.runningConnections
-                .filter { it.endpointId != endpointId }
+                .filter { it != runningConnection }
         )
+        eventListener.onRunningConnectionLost(runningConnection)
     }
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
@@ -308,8 +314,9 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                 ConnectionsStatusCodes.STATUS_ERROR -> {
                     Log.w(
                         "NearbyConnectionsWrapper",
-                        "Connection status was ${ConnectionsStatusCodes.STATUS_ERROR}"
+                        "Connection status ERROR (${ConnectionsStatusCodes.STATUS_ERROR})"
                     )
+                    eventListener.onConnectionError(endpointId)
                 }
                 else -> {
                     Log.w(
@@ -364,13 +371,16 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             override fun onNewRunningConnection(connection: RunningConnection)
                     = listener.onNewRunningConnection(connection)
 
+            override fun onRunningConnectionLost(connection: RunningConnection)
+                    = listener.onRunningConnectionLost(connection)
+
             override fun onNewMessage(message: String, from: RunningConnection)
                     = listener.onNewMessage(message, from)
         })
     }
 
-    fun asAdvertiser(): VisyncNearbyConnectionsAdvertiser = this
-    fun asDiscoverer(): VisyncNearbyConnectionsDiscoverer = this
+    override fun asAdvertiser(): VisyncNearbyConnectionsAdvertiser = this
+    override fun asDiscoverer(): VisyncNearbyConnectionsDiscoverer = this
 
     override fun setEventListener(listener: VisyncDiscovererListener) {
         setEventListener(object : VisyncNearbyConnectionsListener() {
@@ -387,6 +397,9 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             override fun onNewRunningConnection(connection: RunningConnection)
                     = listener.onNewRunningConnection(connection)
 
+            override fun onRunningConnectionLost(connection: RunningConnection)
+                    = listener.onRunningConnectionLost(connection)
+
             override fun onNewMessage(message: String, from: RunningConnection)
                     = listener.onNewMessage(message, from)
         })
@@ -401,10 +414,10 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             if (payload.type == Payload.Type.BYTES) {
                 payload.asBytes()?.let { receivedBytes ->
                     val msg = String(receivedBytes, Charsets.UTF_8)
-                    val trimmedMsg = msg.substring(0, 20.coerceAtMost(msg.length))
+                    val trimmedMsg = msg.substring(0, maxLogMsgLength.coerceAtMost(msg.length))
                     val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
                     Log.d(
-                        "NearbyConnections",
+                        "NearbyConnectionsWrapper",
                         "Received message: $trimmedMsg$maybeThreeDots"
                     )
                     val from = connectionsState.value.runningConnections
@@ -417,10 +430,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             endpointId: String,
             transferUpdate: PayloadTransferUpdate
         ) {
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "Payload transfer update"
-            )
+
         }
     }
 
@@ -469,7 +479,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
 
     private inner class RunningConnectionImpl(
         override val endpointId: String,
-        override val endpointUsername: String,
+        override val username: String,
     ) : RunningConnection {
         override fun sendMessage(msg: String) {
             sendMessage(msg = msg, receiver = this)

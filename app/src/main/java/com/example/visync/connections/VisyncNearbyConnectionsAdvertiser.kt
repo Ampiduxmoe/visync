@@ -10,7 +10,7 @@ interface VisyncNearbyConnectionsAdvertiser {
     fun stopAdvertising()
     fun sendMessageToMultiple(msg: String, receivers: List<RunningConnection>)
     fun setEventListener(listener: VisyncAdvertiserListener)
-    fun stop()
+    fun reset()
 }
 
 interface AdvertiserState {
@@ -22,6 +22,8 @@ interface AdvertiserState {
 interface VisyncAdvertiserListener {
     fun onIsAdvertisingChanged(isAdvertising: Boolean)
     fun onNewConnectionRequest(request: ConnectionRequest)
+    fun onConnectionError(endpoint: String)
     fun onNewRunningConnection(connection: RunningConnection)
+    fun onRunningConnectionLost(connection: RunningConnection)
     fun onNewMessage(message: String, from: RunningConnection)
 }

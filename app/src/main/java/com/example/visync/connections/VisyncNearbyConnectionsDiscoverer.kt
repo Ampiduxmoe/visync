@@ -9,7 +9,7 @@ interface VisyncNearbyConnectionsDiscoverer {
     fun startDiscovering(username: String, context: Context)
     fun stopDiscovering()
     fun setEventListener(listener: VisyncDiscovererListener)
-    fun stop()
+    fun reset()
 }
 
 interface DiscovererState {
@@ -23,6 +23,8 @@ interface VisyncDiscovererListener {
     fun onIsDiscoveringChanged(isDiscovering: Boolean)
     fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint)
     fun onNewConnectionRequest(request: ConnectionRequest)
+    fun onConnectionError(endpoint: String)
     fun onNewRunningConnection(connection: RunningConnection)
+    fun onRunningConnectionLost(connection: RunningConnection)
     fun onNewMessage(message: String, from: RunningConnection)
 }

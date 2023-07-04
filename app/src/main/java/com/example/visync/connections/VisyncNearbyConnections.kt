@@ -4,6 +4,15 @@ import com.google.android.gms.nearby.connection.ConnectionInfo
 import com.google.android.gms.nearby.connection.DiscoveredEndpointInfo
 import kotlinx.coroutines.flow.StateFlow
 
+interface VisyncNearbyConnections :
+    BasicVisyncNearbyConnectionsState,
+    VisyncNearbyConnectionsAdvertiser,
+    VisyncNearbyConnectionsDiscoverer
+{
+    fun asAdvertiser(): VisyncNearbyConnectionsAdvertiser
+    fun asDiscoverer(): VisyncNearbyConnectionsDiscoverer
+}
+
 interface BasicVisyncNearbyConnectionsState {
     val connectionsState: StateFlow<NearbyConnectionsState>
     val eventListener: VisyncNearbyConnectionsListener
@@ -30,7 +39,9 @@ open class VisyncNearbyConnectionsListener(
     override fun onIsDiscoveringChanged(isDiscovering: Boolean) { }
     override fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint) { }
     override fun onNewConnectionRequest(request: ConnectionRequest) { }
+    override fun onConnectionError(endpoint: String) { }
     override fun onNewRunningConnection(connection: RunningConnection) { }
+    override fun onRunningConnectionLost(connection: RunningConnection) { }
     override fun onNewMessage(message: String, from: RunningConnection) { }
 }
 
@@ -49,7 +60,7 @@ interface ConnectionRequest {
 
 interface RunningConnection {
     val endpointId: String
-    val endpointUsername: String
+    val username: String
     fun sendMessage(msg: String)
     fun disconnect()
 }

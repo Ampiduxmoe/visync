@@ -14,16 +14,16 @@ class FakeRoomsRepository : RoomsRepository {
     private val _rooms = MutableStateFlow<List<Room>>(
         (1..9).map {
             Room(
-                id = it.toLong(),
-                name = "${indexWords[it-1].capitalize(Locale.current)} room"
+                endpointId = it.toString(),
+                hostUsername = "${indexWords[it-1].capitalize(Locale.current)} room"
             )
         }
     )
 
     override val rooms: StateFlow<List<Room>> = _rooms
 
-    override fun getRoom(id: Long): Room? {
-        return _rooms.value.firstOrNull { it.id == id }
+    override fun getRoom(endpointId: String): Room? {
+        return _rooms.value.firstOrNull { it.endpointId == endpointId }
     }
 
     override fun tryAddRoom(room: Room): Boolean {

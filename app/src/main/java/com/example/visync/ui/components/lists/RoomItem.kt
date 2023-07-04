@@ -3,13 +3,15 @@ package com.example.visync.ui.components.lists
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import com.example.visync.data.rooms.Room
+import androidx.compose.ui.Modifier
+import com.example.visync.connections.DiscoveredEndpoint
 
 @Composable
 fun RoomItem(
-    room: Room
+    room: DiscoveredEndpoint,
+    modifier: Modifier = Modifier,
 ) {
-    Row {
-        Text(text = room.name)
+    Row(modifier = modifier) {
+        Text(text = "${room.endpointInfo.endpointName} (${room.endpointId})")
     }
 }

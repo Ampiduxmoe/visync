@@ -9,16 +9,19 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
 object PlayerModule {
 
+    @Singleton
     @Provides
     fun providePlayer(app: Application): Player {
         return ExoPlayer.Builder(app).build()
     }
 
+    @Singleton
     @Provides
     fun providePlayerWrapper(player: Player): PlayerWrapper {
         return DefaultPlayerWrapper(player)

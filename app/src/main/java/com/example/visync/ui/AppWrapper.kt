@@ -1,5 +1,6 @@
 package com.example.visync.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
@@ -19,9 +20,11 @@ import com.example.visync.ui.components.navigation.AppNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
 import com.example.visync.ui.screens.main.MainAppViewModel
+import com.example.visync.ui.screens.main.RoomsDiscoveringOptions
 import com.example.visync.ui.screens.main.VisyncPlaybackMode
 import com.example.visync.ui.screens.player.PlaybackSetupScreen
 import com.example.visync.ui.screens.player.PlaybackSetupViewModel
+import com.example.visync.ui.screens.player.SetupMode
 import com.example.visync.ui.screens.player.VisyncPlayer
 import com.example.visync.ui.screens.player.VisyncPlayerViewModel
 
@@ -90,15 +93,41 @@ fun AppWrapper(
                         VisyncPlaybackMode.GROUP -> {
                             val connectionsAdvertiser = playbackSetupViewModel.connectionsAdvertiser
                             val advertiserState = connectionsAdvertiser.advertiserState.value
+                            playbackSetupViewModel.fullResetToHostMode()
                             if (!advertiserState.isAdvertising) {
                                 val username = sideNavigationUiState.editableUsername.value
                                 connectionsAdvertiser.startAdvertising(username, context)
                             }
-                            playbackSetupViewModel.allowSetupEditing()
-                            topLevelNavigationActions.navigateTo(TopLevelRoute.PlaybackSetup.routeString)
+                            topLevelNavigationActions.navigateTo(
+                                TopLevelRoute.PlaybackSetup.routeString
+                            )
                         }
                     }
-                }
+                },
+                roomsDiscoveringOptions = RoomsDiscoveringOptions(
+                    startDiscovering = {
+                        val username = sideNavigationUiState.editableUsername.value
+                        playbackSetupViewModel.fullResetToGuestMode()
+                        playbackSetupConnections.startDiscovering(username, context)
+                    },
+                    stopDiscovering = {
+                        playbackSetupConnections.stopDiscovering()
+                    },
+                    joinRoom = {
+                        playbackSetupViewModel.messageEvents.apply {
+                            onOpenPlayerMessage = {
+                                topLevelNavigationActions.navigateTo(
+                                    TopLevelRoute.Player.routeString
+                                )
+                            }
+                            onSetVideofilesMessage = {
+
+                            }
+                        }
+                        topLevelNavigationActions.navigateTo(TopLevelRoute.PlaybackSetup.routeString)
+                        it.initiateConnection()
+                    }
+                )
             )
         }
         composable(
@@ -106,15 +135,23 @@ fun AppWrapper(
             enterTransition = { fadeIn(snap(transitionDelayMillis)) },
             exitTransition = { ExitTransition.None }
         ) {
+            BackHandler {
+                playbackSetupConnections.reset()
+                playbackSetupViewModel.resetToDefaultState()
+                topLevelNavigationActions.back()
+            }
             PlaybackSetupScreen(
                 playbackSetupState = playbackSetupState,
-                connectedUsers = playbackSetupConnectionsState.runningConnections,
+                approveWatcher = playbackSetupViewModel::approveWatcher,
+                disapproveWatcher = playbackSetupViewModel::disapproveWatcher,
                 openPlayer = {
-                    val isUserHosting = playbackSetupState.canChangePlaybackSettings
-                    if (isUserHosting) {
+                    if (playbackSetupState.setupMode == SetupMode.HOST) {
                         playbackSetupViewModel.sendOpenPlayer()
                         topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
-                        playbackSetupViewModel.connectionsAdvertiser.stopAdvertising()
+                        playbackSetupConnections.stopAdvertising()
+                    }
+                    if (playbackSetupState.setupMode == SetupMode.GUEST) {
+                        playbackSetupViewModel.resetMessageEvents()
                     }
                 }
             )
@@ -132,7 +169,7 @@ fun AppWrapper(
                 hideOverlay = visyncPlayerViewModel::hideOverlay,
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
-                    playbackSetupViewModel.connectionsAdvertiser.stop()
+                    playbackSetupViewModel.connectionsAdvertiser.reset()
                 },
                 player = visyncPlayerViewModel.playerWrapper.getPlayer()
             )

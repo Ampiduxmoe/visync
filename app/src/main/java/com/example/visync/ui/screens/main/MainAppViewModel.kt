@@ -1,10 +1,10 @@
 package com.example.visync.ui.screens.main
 
 import android.content.Context
-import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import com.example.visync.R
 import com.example.visync.data.user.generateNickname
+import com.example.visync.ui.screens.settings.getProfilePreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,12 +41,7 @@ class MainAppViewModel @Inject constructor(
     }
 
     fun initializeNavigationUiState(context: Context) {
-        val packageName = context.packageName
-        val profilePrefsKey = context.getString(R.string.prefs_profile_file_key)
-        val profilePrefs: SharedPreferences = context.getSharedPreferences(
-            "$packageName.$profilePrefsKey",
-            Context.MODE_PRIVATE
-        )
+        val profilePrefs = getProfilePreferences(context)
         val usernameKey = context.getString(R.string.prefs_profile_username)
         val username = profilePrefs.getString(usernameKey, null) ?: generateNickname()
         updateUsernameState(
@@ -55,18 +50,6 @@ class MainAppViewModel @Inject constructor(
             )
         )
         profilePrefs.edit().putString(usernameKey, username).apply()
-    }
-
-    fun hideNavigation() {
-        _uiState.value = _uiState.value.copy(
-            isNavigationVisible = false,
-        )
-    }
-
-    fun showNavigation() {
-        _uiState.value = _uiState.value.copy(
-            isNavigationVisible = true,
-        )
     }
 
     fun enableUsernameEditing() {
@@ -94,12 +77,7 @@ class MainAppViewModel @Inject constructor(
     }
 
     fun applyUsernameChanges(context: Context) {
-        val packageName = context.packageName
-        val profilePrefsKey = context.getString(R.string.prefs_profile_file_key)
-        val profilePrefs: SharedPreferences = context.getSharedPreferences(
-            "$packageName.$profilePrefsKey",
-            Context.MODE_PRIVATE
-        )
+        val profilePrefs = getProfilePreferences(context)
         val usernameKey = context.getString(R.string.prefs_profile_username)
         val username = getUsernameState().value
         profilePrefs.edit().putString(usernameKey, username).apply()

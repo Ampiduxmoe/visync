@@ -40,15 +40,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.connections.DiscoveredEndpoint
 import com.example.visync.connections.RunningConnection
-import com.example.visync.connections.VisyncNearbyConnectionsImpl
+import com.example.visync.connections.VisyncNearbyConnections
 import com.example.visync.connections.VisyncNearbyConnectionsListener
 import com.example.visync.data.playlists.PlaylistWithVideofiles
+import com.example.visync.messaging.JsonVisyncMessageConverter
+import com.example.visync.messaging.OpenPlayerMessage
+import com.example.visync.messaging.TextMessage
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.MainAppNavigation
 import com.example.visync.ui.components.navigation.NavigationType
@@ -56,12 +61,10 @@ import com.example.visync.ui.screens.main.playlists.PlaylistsScreen
 import com.example.visync.ui.screens.main.playlists.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.main.rooms.RoomsScreen
 import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
-import com.example.visync.ui.screens.player.OpenPlayerMessage
-import com.example.visync.ui.screens.player.TextMessage
-import com.example.visync.ui.screens.player.VisyncMessage
-import com.google.android.gms.nearby.Nearby
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import javax.inject.Inject
 
 @Composable
 fun MainApp(
@@ -69,6 +72,7 @@ fun MainApp(
     mainAppUiState: MainAppUiState,
     mainAppNavigationUiState: MainAppNavigationUiState,
     playPlaylist: (PlaybackStartOptions) -> Unit,
+    roomsDiscoveringOptions: RoomsDiscoveringOptions,
 ) {
     val navigationType: NavigationType
     val preferredDisplayMode: ContentDisplayMode
@@ -138,8 +142,16 @@ fun MainApp(
                 val roomsScreenViewModel = hiltViewModel<RoomsScreenViewModel>()
                 val roomsUiState by roomsScreenViewModel
                     .uiState.collectAsStateWithLifecycle()
+                DisposableEffect(Unit) {
+                    roomsDiscoveringOptions.startDiscovering()
+                    onDispose {
+                        roomsDiscoveringOptions.stopDiscovering()
+                        roomsScreenViewModel.clearDiscoveredRooms()
+                    }
+                }
                 RoomsScreen(
-                    roomsUiState = roomsUiState
+                    roomsUiState = roomsUiState,
+                    joinRoom = { roomsDiscoveringOptions.joinRoom(it) }
                 )
             }
             composable(Route.MyProfile.routeString) {
@@ -186,7 +198,14 @@ fun MainApp(
                     Text(
                         text = permissionsState.value
                             .map { entry ->
-                                "${entry.key} ${if(entry.value) "granted" else "denied"}"
+                                val permissionName = entry.key.substring(
+                                    startIndex = entry.key.indexOfLast { it == '.'}
+                                )
+                                val permissionGrantedStatus = when (entry.value) {
+                                    true -> "granted"
+                                    false -> "denied"
+                                }
+                                "$permissionName $permissionGrantedStatus"
                             }.joinToString("\n")
                     )
                     IconButton(
@@ -220,24 +239,21 @@ fun MainApp(
             }
             composable("testNearbyConnections") {
                 val context = LocalContext.current
-                val connectionsWrapper = remember {
-                    VisyncNearbyConnectionsImpl(
-                        Nearby.getConnectionsClient(context)
-                    )
-                }
+                val communicationTestViewModel = hiltViewModel<CommunicationTestViewModel>()
+                val connectionsWrapper = communicationTestViewModel.visyncNearbyConnections
                 val messages = rememberSaveable { mutableStateOf(listOf<String>()) }
-                val jsonIgnoreUnknownKeys = remember { Json { ignoreUnknownKeys = true } }
+                val messageConverter = remember { JsonVisyncMessageConverter() }
                 connectionsWrapper.setEventListener(object : VisyncNearbyConnectionsListener() {
                     override fun onNewMessage(message: String, from: RunningConnection) {
-                        val visyncMessage = jsonIgnoreUnknownKeys.decodeFromString<VisyncMessage>(message)
-                        if (visyncMessage.type == OpenPlayerMessage::class.simpleName!!) {
+                        val fullMessage = messageConverter.decode(message)
+                        if (fullMessage is OpenPlayerMessage) {
                             Toast.makeText(
                                 /* context = */ context,
                                 /* text = */ "playback started!",
                                 /* duration = */ Toast.LENGTH_SHORT
                             ).show()
                         }
-                        messages.value += "${from.endpointUsername}: $message"
+                        messages.value += "${from.username}: $message"
                     }
                 })
                 val nearbyConnectionsState by connectionsWrapper
@@ -245,7 +261,7 @@ fun MainApp(
                 val username = mainAppNavigationUiState.editableUsername.value
                 DisposableEffect(Unit) {
                     onDispose {
-                        connectionsWrapper.stop()
+                        connectionsWrapper.reset()
                     }
                 }
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -411,12 +427,25 @@ enum class ContentDisplayMode {
     SINGLE_COLUMN, DUAL_COLUMN
 }
 
-data class PlaybackStartOptions(
+class PlaybackStartOptions(
     val playlist: PlaylistWithVideofiles,
     val startFrom: Int,
     val playbackMode: VisyncPlaybackMode,
 )
 
+class RoomsDiscoveringOptions(
+    val startDiscovering: () -> Unit,
+    val stopDiscovering: () -> Unit,
+    val joinRoom: (DiscoveredEndpoint) -> Unit,
+)
+
 enum class VisyncPlaybackMode {
     ALONE, GROUP
+}
+
+@HiltViewModel
+class CommunicationTestViewModel @Inject constructor(
+    val visyncNearbyConnections: VisyncNearbyConnections,
+) : ViewModel() {
+
 }

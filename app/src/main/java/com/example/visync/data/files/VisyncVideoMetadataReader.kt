@@ -3,14 +3,12 @@ package com.example.visync.data.files
 import android.app.Application
 import android.net.Uri
 import android.provider.MediaStore
-import android.util.Log
 
 class VisyncVideoMetadataReader(
     private val app: Application
 ): VideoMetadataReader {
 
     override fun getMetadataFromUri(contentUri: Uri): VideoMetadata? {
-        Log.d("VisyncVideoMetadataReader", "contentUri is $contentUri")
         if (contentUri.scheme != "content") {
             return null
         }
@@ -29,7 +27,6 @@ class VisyncVideoMetadataReader(
                 cursor.getString(index)
             }
         return filename?.let { fullFilename ->
-            Log.d("VisyncVideoMetadataReader", "fullFilename is $fullFilename")
             VideoMetadata(
                 filename = Uri.parse(fullFilename).lastPathSegment ?: return null
             )

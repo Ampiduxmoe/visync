@@ -30,6 +30,10 @@ class AppNavigationActions(private val navController: NavHostController) {
             restoreState = true
         }
     }
+
+    fun back() {
+        navController.navigateUp()
+    }
 }
 
 val TOP_LEVEL_DESTINATIONS = listOf(

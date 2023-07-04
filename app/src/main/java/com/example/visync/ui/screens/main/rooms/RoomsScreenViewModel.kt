@@ -2,52 +2,53 @@ package com.example.visync.ui.screens.main.rooms
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.visync.data.rooms.Room
-import com.example.visync.data.rooms.RoomsRepository
+import com.example.visync.connections.DiscoveredEndpoint
+import com.example.visync.connections.VisyncNearbyConnections
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class RoomsScreenViewModel @Inject constructor(
-    private val roomsRepository: RoomsRepository
+    visyncNearbyConnections: VisyncNearbyConnections
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(RoomsUiState(loading = true))
+    private val connectionsDiscoverer = visyncNearbyConnections.asDiscoverer()
+
+    private val defaultUiState = RoomsUiState(
+        rooms = listOf()
+    )
+
+    private val _uiState = MutableStateFlow(defaultUiState)
     val uiState: StateFlow<RoomsUiState> = _uiState
 
     init {
-        observeRooms()
+        observeDiscovererState()
     }
 
-    private fun observeRooms() {
+    @OptIn(FlowPreview::class)
+    private fun observeDiscovererState() {
         viewModelScope.launch {
-            roomsRepository.rooms.collect { rooms ->
-                _uiState.value = RoomsUiState(rooms = rooms)
+            connectionsDiscoverer.discovererState.debounce(100L).collect {
+                _uiState.update { state ->
+                    state.copy(
+                        rooms = it.discoveredEndpoints
+                    )
+                }
             }
         }
     }
 
-    fun setSelectedRoom(roomId: Long) {
-        val room = uiState.value.rooms.find { it.id == roomId }
-        _uiState.value = _uiState.value.copy(
-            selectedRoom = room,
-        )
-    }
-
-    fun closeDetailScreen() {
-        _uiState.value = _uiState
-            .value.copy(
-                selectedRoom = null,
-            )
+    fun clearDiscoveredRooms() {
+        _uiState.update { defaultUiState }
     }
 }
 
 data class RoomsUiState(
-    val rooms: List<Room> = emptyList(),
-    val selectedRoom: Room? = null,
-    val loading: Boolean = false,
-    val error: String? = null
+    val rooms: List<DiscoveredEndpoint> = emptyList(),
 )
