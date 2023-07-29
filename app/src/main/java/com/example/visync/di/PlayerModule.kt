@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.example.visync.player.DefaultPlayerWrapper
-import com.example.visync.player.HostPlayerWrapper
 import com.example.visync.player.PlayerWrapper
 import dagger.Module
 import dagger.Provides
@@ -25,6 +24,6 @@ object PlayerModule {
     @Singleton
     @Provides
     fun providePlayerWrapper(player: Player): PlayerWrapper {
-        return HostPlayerWrapper(player)
+        return DefaultPlayerWrapper(player)
     }
 }

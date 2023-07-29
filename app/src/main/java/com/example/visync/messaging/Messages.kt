@@ -1,7 +1,7 @@
 package com.example.visync.messaging
 
-import com.example.visync.ui.screens.player.PlaybackSetupOptions
-import com.example.visync.ui.screens.player.Watcher
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupOptions
+import com.example.visync.ui.screens.main.playback_setup.Watcher
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json

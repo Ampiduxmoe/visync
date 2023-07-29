@@ -22,7 +22,7 @@
 
     <!--tab labels are for navigation buttons-->
     <string name="tab_label_player">Player</string>
-    <string name="tab_label_playlists">Play</string>
+    <string name="tab_label_playback_setup">Play</string>
     <string name="tab_label_rooms_join">Join</string>
 
     <string name="tab_label_my_profile">Profile</string>
@@ -32,7 +32,7 @@
 
     <!--tab names are what top app bar should show-->
     <string name="tab_name_player">Player</string>
-    <string name="tab_name_playlists">Playlists</string>
+    <string name="tab_name_playback_setup">Playback setup</string>
     <string name="tab_name_rooms_join">Rooms</string>
 
     <string name="tab_name_my_profile">My profile</string>

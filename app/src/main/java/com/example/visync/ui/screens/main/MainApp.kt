@@ -57,8 +57,6 @@ import com.example.visync.messaging.TextMessage
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.MainAppNavigation
 import com.example.visync.ui.components.navigation.NavigationType
-import com.example.visync.ui.screens.main.playlists.PlaylistsScreen
-import com.example.visync.ui.screens.main.playlists.PlaylistsScreenViewModel
 import com.example.visync.ui.screens.main.rooms.RoomsScreen
 import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -72,7 +70,7 @@ fun MainApp(
     mainAppUiState: MainAppUiState,
     mainAppNavigationUiState: MainAppNavigationUiState,
     playPlaylist: (PlaybackStartOptions) -> Unit,
-    roomDiscoveringOptions: RoomDiscoveringOptions,
+    roomDiscoveringActions: RoomDiscoveringActions,
 ) {
     val navigationType: NavigationType
     val preferredDisplayMode: ContentDisplayMode
@@ -107,51 +105,33 @@ fun MainApp(
     ) {
         NavHost(
             navController = navController,
-            startDestination = Route.Playlists.routeString,
+            startDestination = Route.PlaybackSetup.routeString,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(Route.Playlists.routeString) {
-                val playlistsScreenViewModel = hiltViewModel<PlaylistsScreenViewModel>()
-                val playlistsUiState by playlistsScreenViewModel
-                    .uiState.collectAsStateWithLifecycle()
-                PlaylistsScreen(
-                    preferredDisplayMode = preferredDisplayMode,
-                    playlistsUiState = playlistsUiState,
-                    openPlaylist = { playlistsScreenViewModel.setSelectedPlaylist(it.playlistId) },
-                    closePlaylist = playlistsScreenViewModel::unselectPlaylist,
-                    addPlaylist = playlistsScreenViewModel::addPlaylist,
-                    addVideosToPlaylistFromUri = { playlist, uris ->
-                        playlistsScreenViewModel.addVideosToPlaylistFromUri(
-                            playlist = playlist,
-                            uris = uris.toTypedArray()
-                        )
-                     },
-                    playVideofile = { videofile ->
-                        val videofilesToPlay = listOf(videofile)
-                        val playbackStartOptions = PlaybackStartOptions(
-                            videofiles = videofilesToPlay,
-                            startFrom = 0,
-                            playbackMode = VisyncPlaybackMode.GROUP
-                        )
-                        playPlaylist(playbackStartOptions)
-                    },
-                    openDrawer = openDrawer
-                )
+            composable(Route.PlaybackSetup.routeString) {
+
             }
             composable(Route.RoomsJoin.routeString) {
                 val roomsScreenViewModel = hiltViewModel<RoomsScreenViewModel>()
                 val roomsUiState by roomsScreenViewModel
                     .uiState.collectAsStateWithLifecycle()
                 DisposableEffect(Unit) {
-                    roomDiscoveringOptions.startDiscoveringClean()
                     onDispose {
-                        roomDiscoveringOptions.stopDiscovering()
+                        roomDiscoveringActions.stopDiscovering()
                         roomsScreenViewModel.clearDiscoveredRooms()
                     }
                 }
+                IconButton(
+                    onClick = { roomDiscoveringActions.startDiscoveringClean() }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "start discovering"
+                    )
+                }
                 RoomsScreen(
                     roomsUiState = roomsUiState,
-                    joinRoom = { roomDiscoveringOptions.joinRoom(it) }
+                    joinRoom = { roomDiscoveringActions.joinRoom(it) }
                 )
             }
             composable(Route.MyProfile.routeString) {
@@ -436,7 +416,7 @@ class PlaybackStartOptions(
     val playbackMode: VisyncPlaybackMode,
 )
 
-class RoomDiscoveringOptions(
+class RoomDiscoveringActions(
     val startDiscoveringClean: () -> Unit,
     val stopDiscovering: () -> Unit,
     val joinRoom: (DiscoveredEndpoint) -> Unit,

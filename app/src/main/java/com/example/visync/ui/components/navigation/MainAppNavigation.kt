@@ -47,7 +47,7 @@ fun MainAppNavigation(
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val selectedDestination = navBackStackEntry?.destination?.route
-        ?: Route.Playlists.routeString
+        ?: Route.PlaybackSetup.routeString
 
     when (navigationType) {
         NavigationType.BOTTOM_NAVBAR_AND_DRAWER -> {

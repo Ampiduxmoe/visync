@@ -6,7 +6,6 @@ import android.os.Looper
 import androidx.lifecycle.ViewModel
 import androidx.media3.common.MediaItem
 import com.example.visync.data.videofiles.Videofile
-import com.example.visync.data.videofiles.VideofilesRepository
 import com.example.visync.player.PlayerWrapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +15,6 @@ import javax.inject.Inject
 @HiltViewModel
 class VisyncPlayerViewModel @Inject constructor(
     val playerWrapper: PlayerWrapper,
-    val videofilesRepository: VideofilesRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(

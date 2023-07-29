@@ -1,4 +1,4 @@
-package com.example.visync.ui.screens.player
+package com.example.visync.ui.screens.main.playback_setup
 
 import android.util.Log
 import androidx.lifecycle.ViewModel

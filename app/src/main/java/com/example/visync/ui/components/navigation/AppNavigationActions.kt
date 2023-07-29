@@ -38,7 +38,6 @@ class AppNavigationActions(private val navController: NavHostController) {
 
 val TOP_LEVEL_DESTINATIONS = listOf(
     TopLevelRoute.MainApp,
-    TopLevelRoute.PlaybackSetup,
     TopLevelRoute.Player,
 )
 
@@ -48,7 +47,7 @@ val TOP_LEVEL_DESTINATIONS = listOf(
  *  join existing room with someone who already started hosting.
  */
 val CONNECTION_MODE_DESTINATIONS = listOf(
-    Route.Playlists,
+    Route.PlaybackSetup,
     Route.RoomsJoin
 )
 
@@ -75,9 +74,6 @@ sealed class TopLevelRoute(
     object MainApp : TopLevelRoute(
         routeString = "mainApp"
     )
-    object PlaybackSetup : TopLevelRoute(
-        routeString = "playback_setup"
-    )
     object Player : TopLevelRoute(
         routeString = "player"
     )
@@ -95,10 +91,10 @@ sealed class Route(
         icon.imageVector
     }!!
 
-    object Playlists : Route(
-        routeString = "playlists",
+    object PlaybackSetup : Route(
+        routeString = "playback_setup",
         icon = RouteIcon(Icons.Filled.PlayArrow),
-        actionDescriptionId = R.string.tab_label_playlists
+        actionDescriptionId = R.string.tab_label_playback_setup
     )
     object RoomsJoin : Route(
         routeString = "rooms_join",
@@ -128,6 +124,8 @@ sealed class Route(
 }
 
 class RouteIcon {
+
+    // TODO: either remove imageVector or make separate class with it
 
     @DrawableRes
     val resourceId: Int?
