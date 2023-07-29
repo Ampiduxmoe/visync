@@ -1,6 +1,7 @@
 package com.example.visync.ui
 
 import android.content.Context
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.snap
@@ -18,8 +19,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.visync.connections.DiscoveredEndpoint
+import com.example.visync.connections.RunningConnection
 import com.example.visync.connections.VisyncNearbyConnectionsState
 import com.example.visync.connections.VisyncNearbyConnections
+import com.example.visync.data.videofiles.Videofile
+import com.example.visync.messaging.JsonVisyncMessageConverter
+import com.example.visync.messaging.PlaybackPauseUnpauseMessage
+import com.example.visync.messaging.PlaybackSeekToMessage
+import com.example.visync.messaging.PlaybackSeekToPrevNextMessage
+import com.example.visync.messaging.VisyncMessage
+import com.example.visync.player.HostPlayerWrapperPlaybackControls
+import com.example.visync.player.PlayerMessageSender
 import com.example.visync.ui.components.navigation.AppNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
@@ -27,6 +37,7 @@ import com.example.visync.ui.screens.main.MainAppViewModel
 import com.example.visync.ui.screens.main.PlaybackStartOptions
 import com.example.visync.ui.screens.main.RoomDiscoveringOptions
 import com.example.visync.ui.screens.main.VisyncPlaybackMode
+import com.example.visync.ui.screens.player.PlaybackSetupOptionSetters
 import com.example.visync.ui.screens.player.PlaybackSetupScreen
 import com.example.visync.ui.screens.player.PlaybackSetupViewModel
 import com.example.visync.ui.screens.player.SetupMode
@@ -118,6 +129,7 @@ fun AppWrapper(
                         transitionToPlaybackSetupAsGuest(
                             connectTo = it,
                             topLevelNavigationActions = topLevelNavigationActions,
+                            visyncPlayerViewModel = visyncPlayerViewModel,
                             playbackSetupViewModel = playbackSetupViewModel
                         )
                     }
@@ -138,6 +150,33 @@ fun AppWrapper(
                 playbackSetupState = playbackSetupState,
                 approveWatcher = playbackSetupViewModel::approveWatcher,
                 disapproveWatcher = playbackSetupViewModel::disapproveWatcher,
+                playbackSetupOptionSetters = PlaybackSetupOptionSetters(
+                    setSelectedFileIndex = { index ->
+                        val currentVideofileNames = playbackSetupState
+                            .playbackSetupOptions.videofileNames
+                        visyncPlayerViewModel.setVideofilesToPlay(
+                            videofilesToPlay = visyncPlayerUiState.currentPlaylist.map { it.key },
+                            startFrom = index
+                        )
+                        playbackSetupViewModel.setVideofilesToPlayAndNotifyIfNeeded(
+                            videofileNames = currentVideofileNames,
+                            startFrom = index
+                        )
+                    },
+                    setDoStream = { doStream ->
+                        playbackSetupViewModel.setDoStream(doStream)
+                    },
+                    setPlaybackSpeed = { playbackSpeed ->
+                        val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
+                        playbackControls.setPlaybackSpeed(playbackSpeed)
+                        playbackSetupViewModel.setPlaybackSpeed(playbackSpeed)
+                    },
+                    toggleRepeatMode = {
+                        val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
+                        val newRepeatMode = playbackControls.toggleRepeatMode()
+                        playbackSetupViewModel.setRepeatMode(newRepeatMode)
+                    }
+                ),
                 openPlayer = {
                     if (playbackSetupState.setupMode == SetupMode.HOST) {
                         playbackSetupViewModel.sendOpenPlayer()
@@ -164,6 +203,10 @@ fun AppWrapper(
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
                     playbackSetupConnections.reset()
+                    val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
+                    if (playbackControls is HostPlayerWrapperPlaybackControls) {
+                        playbackControls.removePlayerMessageSender()
+                    }
                 },
                 player = visyncPlayerViewModel.playerWrapper.getPlayer()
             )
@@ -181,11 +224,24 @@ fun transitionToPlaybackSetupAsHost(
     playbackSetupConnections: VisyncNearbyConnections,
     playbackSetupConnectionsState: VisyncNearbyConnectionsState,
 ) {
+    playbackSetupViewModel.fullResetToHostMode()
     visyncPlayerViewModel.setVideofilesToPlay(
         videofilesToPlay = playbackStartOptions.videofiles,
         startFrom = playbackStartOptions.startFrom
     )
-    playbackSetupViewModel.fullResetToHostMode()
+    playbackSetupViewModel.setVideofilesToPlayNoNotify(
+        videofileNames = playbackStartOptions.videofiles.map { it.metadata.filename },
+        startFrom = playbackStartOptions.startFrom
+    )
+    val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
+    Log.d("shit", "checking")
+    if (playbackControls is HostPlayerWrapperPlaybackControls) {
+        Log.d("shit", "setting message sender")
+        playbackControls.setPlayerMessageSender(getHostPlayerMessageSender(
+            playbackSetupViewModel = playbackSetupViewModel,
+            playbackSetupConnections = playbackSetupConnections
+        ))
+    }
     if (!playbackSetupConnectionsState.isAdvertising) {
         playbackSetupConnections.startAdvertising(username, context)
     }
@@ -197,6 +253,7 @@ fun transitionToPlaybackSetupAsHost(
 fun transitionToPlaybackSetupAsGuest(
     connectTo: DiscoveredEndpoint,
     topLevelNavigationActions: AppNavigationActions,
+    visyncPlayerViewModel: VisyncPlayerViewModel,
     playbackSetupViewModel: PlaybackSetupViewModel,
 ) {
     playbackSetupViewModel.messageEvents.apply {
@@ -205,10 +262,94 @@ fun transitionToPlaybackSetupAsGuest(
                 TopLevelRoute.Player.routeString
             )
         }
-        onSetVideofilesMessage = {
-
+        onSetVideofilesMessage = { videofileNames, startFrom ->
+            val videofilesRepository = visyncPlayerViewModel.videofilesRepository
+            val videofiles =  emptyList<Videofile>() // videofilesRepository.videofiles.value
+            TODO()
+            val namesToVideofiles = videofileNames.associateWith { filename ->
+                videofiles.find { it.metadata.filename == filename }
+            }
+            val selectedVideofile = namesToVideofiles.values.toList()[startFrom]
+            Log.d("shit", "videofiles = $videofiles")
+            Log.d("shit", "names to vids = $namesToVideofiles")
+            val correctedVideofilesList = namesToVideofiles.values.filterNotNull().toList()
+            val correctedIndex = when (selectedVideofile) {
+                null -> 0
+                else -> correctedVideofilesList.indexOf(selectedVideofile)
+            }
+            visyncPlayerViewModel.setVideofilesToPlay(correctedVideofilesList, correctedIndex)
+            val missingVideofileNames = namesToVideofiles.filter { it.value == null }.keys.toList()
+            missingVideofileNames
+        }
+        onPlaybackSetupOptionsUpdateMessage = { playbackSetupOptions ->
+            val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
+            playbackControls.setPlaybackSpeed(playbackSetupOptions.playbackSpeed)
+            playbackControls.setRepeatMode(playbackSetupOptions.repeatMode)
+        }
+        onPauseUnpauseMessage = { message ->
+            val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
+            when (message.doPause) {
+                true -> { playbackControls.pause() }
+                false -> { playbackControls.unpause() }
+            }
         }
     }
     topLevelNavigationActions.navigateTo(TopLevelRoute.PlaybackSetup.routeString)
     connectTo.initiateConnection()
+}
+
+fun getHostPlayerMessageSender(
+    playbackSetupViewModel: PlaybackSetupViewModel,
+    playbackSetupConnections: VisyncNearbyConnections
+) = object : PlayerMessageSender {
+
+    private val messageConverter = JsonVisyncMessageConverter()
+
+    private fun getApprovedWatchersConnections(): List<RunningConnection> {
+        val approvedIds = playbackSetupViewModel.playbackSetupState.value.otherWatchers
+            .filter { it.isApproved }
+            .map { it.endpointId }
+        return playbackSetupConnections.connectionsState.value.runningConnections
+            .filter { it.endpointId in approvedIds }
+    }
+
+    private inline fun <reified T: VisyncMessage> encodeAndSend(fullMessage: T) {
+        Log.d("shit", "sending msg from player controls!!!!")
+        val encodedMsg = messageConverter.encode(fullMessage)
+        playbackSetupConnections.sendMessageToMultiple(
+            msg = encodedMsg,
+            receivers = getApprovedWatchersConnections()
+        )
+    }
+
+    override fun sendSeekToPrevMessage() {
+        val seekToMessage = PlaybackSeekToPrevNextMessage(toPrev = true)
+        encodeAndSend(seekToMessage)
+    }
+    override fun sendSeekToNextMessage() {
+        val seekToMessage = PlaybackSeekToPrevNextMessage(toPrev = false)
+        encodeAndSend(seekToMessage)
+    }
+    override fun sendPauseMessage() {
+        val pauseUnpauseMessage = PlaybackPauseUnpauseMessage(doPause = true)
+        encodeAndSend(pauseUnpauseMessage)
+    }
+    override fun sendUnpauseMessage() {
+        val pauseUnpauseMessage = PlaybackPauseUnpauseMessage(doPause = false)
+        encodeAndSend(pauseUnpauseMessage)
+    }
+    override fun sendSeekToMessage(seekTo: Float) {
+        val seekToMessage = PlaybackSeekToMessage(
+            seekToLong = null,
+            seekToFloat = seekTo
+        )
+        encodeAndSend(seekToMessage)
+    }
+    override fun sendSeekToMessage(seekTo: Long) {
+        val seekToMessage = PlaybackSeekToMessage(
+            seekToLong = seekTo,
+            seekToFloat = null
+        )
+        encodeAndSend(seekToMessage)
+    }
 }

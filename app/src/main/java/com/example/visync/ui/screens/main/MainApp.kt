@@ -117,17 +117,16 @@ fun MainApp(
                 PlaylistsScreen(
                     preferredDisplayMode = preferredDisplayMode,
                     playlistsUiState = playlistsUiState,
-                    openPlaylist = { playlistsScreenViewModel.setSelectedPlaylist(it.id) },
-                    closePlaylist = playlistsScreenViewModel::closeDetailScreen,
-                    addVideoToPlaylistFromUri = playlistsScreenViewModel::addVideoToPlaylistFromUri,
+                    openPlaylist = { playlistsScreenViewModel.setSelectedPlaylist(it.playlistId) },
+                    closePlaylist = playlistsScreenViewModel::unselectPlaylist,
+                    addPlaylist = playlistsScreenViewModel::addPlaylist,
+                    addVideosToPlaylistFromUri = { playlist, uris ->
+                        playlistsScreenViewModel.addVideosToPlaylistFromUri(
+                            playlist = playlist,
+                            uris = uris.toTypedArray()
+                        )
+                     },
                     playVideofile = { videofile ->
-                        val parentPlaylistWithVideofiles = playlistsUiState.playlists
-                            .find { playlistWithVideofiles ->
-                                playlistWithVideofiles.playlist.id == videofile.playlistId
-                            }!! // since videofile always belongs to a playlist
-                        val videofileIndex = parentPlaylistWithVideofiles.videofiles
-                            .indexOf(videofile)
-                        // only select one for now
                         val videofilesToPlay = listOf(videofile)
                         val playbackStartOptions = PlaybackStartOptions(
                             videofiles = videofilesToPlay,
@@ -181,6 +180,9 @@ fun MainApp(
                         Manifest.permission.BLUETOOTH_CONNECT       to 31..999,
                         Manifest.permission.BLUETOOTH_SCAN          to 31..999,
                         Manifest.permission.NEARBY_WIFI_DEVICES     to 33..999,
+
+                        Manifest.permission.READ_EXTERNAL_STORAGE   to 1..999,
+                        Manifest.permission.READ_MEDIA_VIDEO        to 33..999,
                     )
                 )
                 val context = LocalContext.current

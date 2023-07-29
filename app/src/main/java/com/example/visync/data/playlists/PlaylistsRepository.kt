@@ -1,12 +1,13 @@
 package com.example.visync.data.playlists
 
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
 
 interface PlaylistsRepository {
 
-    val playlists: StateFlow<List<Playlist>>
+    val playlists: Flow<List<Playlist>>
 
-    fun getPlaylist(id: Long): Playlist?
+    fun getPlaylistWithVideofiles(id: Long): Flow<PlaylistWithVideofiles?>
 
-    fun tryAddPlaylist(playlist: Playlist): Boolean
+    /** Adds new playlists if its id doesn't conflict with other playlists. */
+    fun tryAddPlaylist(playlist: Playlist)
 }

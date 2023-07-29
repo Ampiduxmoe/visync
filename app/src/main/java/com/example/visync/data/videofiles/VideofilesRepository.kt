@@ -1,16 +1,16 @@
 package com.example.visync.data.videofiles
 
-import kotlinx.coroutines.flow.StateFlow
+import android.net.Uri
+import com.example.visync.data.playlists.Playlist
+import kotlinx.coroutines.flow.Flow
 
 interface VideofilesRepository {
 
-    val videofiles: StateFlow<List<Videofile>>
+    val videofiles: Flow<List<Videofile>>
 
-    fun getVideofile(id: Long): Videofile?
+    fun tryAddVideofilesToPlaylist(playlist: Playlist, vararg videofiles: Videofile): List<Long>
 
-    fun tryAddVideofile(videofile: Videofile): Boolean
+    fun removeVideofiles(vararg videofiles: Videofile)
 
-    fun tryAddVideofiles(videofiles: List<Videofile>): Int
-
-    fun removeAllVideofiles()
+    fun selectExistingFromUris(vararg uris: Uri): List<Uri>
 }

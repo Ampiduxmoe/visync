@@ -1,6 +1,8 @@
 package com.example.visync.ui.screens.player
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.media3.common.Player
 import com.example.visync.connections.ConnectionRequest
 import com.example.visync.connections.RunningConnection
 import com.example.visync.connections.VisyncNearbyConnections
@@ -9,9 +11,11 @@ import com.example.visync.messaging.JsonVisyncMessageConverter
 import com.example.visync.messaging.OpenPlayerMessage
 import com.example.visync.messaging.RequestVersionMessage
 import com.example.visync.messaging.AllWatchersUpdateMessage
+import com.example.visync.messaging.DoNotHaveVideofilesMessage
+import com.example.visync.messaging.PlaybackPauseUnpauseMessage
+import com.example.visync.messaging.PlaybackSetupOptionsUpdateMessage
 import com.example.visync.messaging.RequestSelfInfoMessage
 import com.example.visync.messaging.SelfInfoMessage
-import com.example.visync.messaging.SetVideofilesMessage
 import com.example.visync.messaging.VersionMessage
 import com.example.visync.messaging.VisyncMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +33,9 @@ class PlaybackSetupViewModel @Inject constructor(
     val connectionsAdvertiser = visyncNearbyConnections.asAdvertiser()
     val connectionsDiscoverer = visyncNearbyConnections.asDiscoverer()
 
+    val _allRunningConnections
+        get() = visyncNearbyConnections.connectionsState.value.runningConnections
+
     private val messagingVersion = 1
     private val setupModeDefault = SetupMode.HOST
     private val meAsWatcherDefault = Watcher(
@@ -36,7 +43,7 @@ class PlaybackSetupViewModel @Inject constructor(
         username = "",
         messagingVersion = messagingVersion,
         isApproved = false,
-        videofilesNotFound = false
+        missingVideofileNames = listOf()
     )
     private val playbackSetupStateDefault = PlaybackSetupState(
         setupMode = setupModeDefault,
@@ -44,7 +51,14 @@ class PlaybackSetupViewModel @Inject constructor(
         connectionError = false,
         hostAsWatcher = meAsWatcherDefault,
         meAsWatcher = meAsWatcherDefault,
-        otherWatchers = listOf()
+        otherWatchers = listOf(),
+        playbackSetupOptions = PlaybackSetupOptions(
+            videofileNames = listOf(),
+            selectedVideofileIndex = -1,
+            doStream = false,
+            playbackSpeed = 1f,
+            repeatMode = Player.REPEAT_MODE_OFF,
+        ),
     )
 
     private val _playbackSetupState = MutableStateFlow(playbackSetupStateDefault)
@@ -68,6 +82,9 @@ class PlaybackSetupViewModel @Inject constructor(
     private var _otherWatchers
         get() = _playbackSetupState.value.otherWatchers
         set(value) = _playbackSetupState.update { it.copy(otherWatchers = value) }
+    private var _playbackSetupOptions
+        get() = _playbackSetupState.value.playbackSetupOptions
+        set(value) = _playbackSetupState.update { it.copy(playbackSetupOptions = value) }
 
     var messageEvents = getEmptyMessageEvents()
         private set
@@ -85,10 +102,10 @@ class PlaybackSetupViewModel @Inject constructor(
             }
             override fun onNewRunningConnection(connection: RunningConnection) {
                 if (_meAsWatcher.endpointId == meAsWatcherDefault.endpointId) {
-                    playbackSetupMessaging.sendRequestSelfInfo(connection)
+                    playbackSetupMessenger.sendRequestSelfInfo(connection)
                 }
                 if (_setupMode == SetupMode.HOST) {
-                    playbackSetupMessaging.sendRequestMessagingVersion(connection)
+                    playbackSetupMessenger.sendRequestMessagingVersion(connection)
                 }
                 if( _setupMode == SetupMode.GUEST && _isConnectingToHost) {
                     _isConnectingToHost = false
@@ -101,7 +118,7 @@ class PlaybackSetupViewModel @Inject constructor(
                 }
             }
             override fun onNewMessage(message: String, from: RunningConnection) {
-                playbackSetupMessaging.process(message, from)
+                playbackSetupMessenger.process(message, from)
             }
         })
         observeAdvertiserState()
@@ -138,19 +155,22 @@ class PlaybackSetupViewModel @Inject constructor(
     private fun addWatcher(watcher: Watcher) {
         _otherWatchers = _otherWatchers + watcher
         if (_setupMode == SetupMode.HOST) {
-            playbackSetupMessaging.sendAllWatchersUpdate()
+            playbackSetupMessenger.sendAllWatchersUpdate()
         }
     }
 
     private fun removeWatcher(endpointId: String) {
         _otherWatchers = _otherWatchers.filter { it.endpointId != endpointId }
         if (_setupMode == SetupMode.HOST) {
-            playbackSetupMessaging.sendAllWatchersUpdate()
+            playbackSetupMessenger.sendAllWatchersUpdate()
         }
     }
 
     fun approveWatcher(watcher: Watcher) {
         setIsApprovedForWatcher(watcher, true)
+        if (_setupMode == SetupMode.HOST) {
+            playbackSetupMessenger.sendPlaybackSetupOptionsUpdate(to = watcher)
+        }
     }
 
     fun disapproveWatcher(watcher: Watcher) {
@@ -176,7 +196,7 @@ class PlaybackSetupViewModel @Inject constructor(
             _otherWatchers = _otherWatchers.withReplacedWatcher(watcher, newWatcher)
         }
         if (_setupMode == SetupMode.HOST) {
-            playbackSetupMessaging.sendAllWatchersUpdate()
+            playbackSetupMessenger.sendAllWatchersUpdate()
         }
     }
 
@@ -193,19 +213,58 @@ class PlaybackSetupViewModel @Inject constructor(
         }
     }
 
+    fun setVideofilesToPlayNoNotify(videofileNames: List<String>, startFrom: Int) {
+        _playbackSetupOptions = _playbackSetupOptions.copy(
+            videofileNames = videofileNames,
+            selectedVideofileIndex = startFrom
+        )
+    }
+
+    fun setVideofilesToPlayAndNotifyIfNeeded(videofileNames: List<String>, startFrom: Int) {
+        _playbackSetupOptions = _playbackSetupOptions.copy(
+            videofileNames = videofileNames,
+            selectedVideofileIndex = startFrom
+        )
+        if (_setupMode == SetupMode.HOST) {
+            playbackSetupMessenger.sendPlaybackSetupOptionsUpdate()
+        }
+    }
+
+    fun setDoStream(doStream: Boolean) {
+        _playbackSetupOptions = _playbackSetupOptions.copy(doStream = doStream)
+        if (_setupMode == SetupMode.HOST) {
+            playbackSetupMessenger.sendPlaybackSetupOptionsUpdate()
+        }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        _playbackSetupOptions = _playbackSetupOptions.copy(playbackSpeed = speed)
+        if (_setupMode == SetupMode.HOST) {
+            playbackSetupMessenger.sendPlaybackSetupOptionsUpdate()
+        }
+    }
+
+    fun setRepeatMode(repeatMode: @Player.RepeatMode Int) {
+        _playbackSetupOptions = _playbackSetupOptions.copy(repeatMode = repeatMode)
+        if (_setupMode == SetupMode.HOST) {
+            playbackSetupMessenger.sendPlaybackSetupOptionsUpdate()
+        }
+    }
+
     fun sendOpenPlayer() {
-        playbackSetupMessaging.sendOpenPlayer()
+        playbackSetupMessenger.sendOpenPlayer()
     }
 
     fun resetMessageEvents() {
         messageEvents = getEmptyMessageEvents()
     }
 
-    private val playbackSetupMessaging = object {
+    private val playbackSetupMessenger = object {
         val messageConverter = JsonVisyncMessageConverter()
 
         fun process(msg: String, sender: RunningConnection) {
             val fullMessage = messageConverter.decode(msg)
+            Log.d("shit", "videofilenames = ${_playbackSetupOptions.videofileNames}")
 
             when (fullMessage) {
                 is RequestSelfInfoMessage -> {
@@ -236,8 +295,20 @@ class PlaybackSetupViewModel @Inject constructor(
                         username = sender.username,
                         messagingVersion = fullMessage.version,
                         isApproved = false,
-                        videofilesNotFound = false
+                        missingVideofileNames = listOf()
                     ))
+                }
+                is DoNotHaveVideofilesMessage -> {
+                    val oldWatcher = _otherWatchers.find { it.endpointId == sender.endpointId }
+                        ?: return
+                    val newWatcher = oldWatcher.copy(
+                        missingVideofileNames = fullMessage.videofileNames
+                    )
+                    _otherWatchers = _otherWatchers.withReplacedWatcher(oldWatcher, newWatcher)
+                    sendAllWatchersUpdate(
+                        to = _allRunningConnections
+                            .filter { it.endpointId != sender.endpointId }
+                    )
                 }
             }
         }
@@ -247,21 +318,51 @@ class PlaybackSetupViewModel @Inject constructor(
                 is RequestVersionMessage -> {
                     sendMessagingVersion(to = sender)
                 }
-                is SetVideofilesMessage -> {
-                    messageEvents.onSetVideofilesMessage?.invoke(fullMessage.videofileNames)
+                is PlaybackSetupOptionsUpdateMessage -> {
+                    val oldPlaybackSetupOptions = _playbackSetupOptions
+                    val oldVideofileNames = oldPlaybackSetupOptions.videofileNames
+                    val oldSelectionIndex = oldPlaybackSetupOptions.selectedVideofileIndex
+                    val newPlaybackSetupOptions = fullMessage.playbackSetupOptions
+                    val newVideofileNames = newPlaybackSetupOptions.videofileNames
+                    val newSelectionIndex = newPlaybackSetupOptions.selectedVideofileIndex
+                    val shouldSetVideofiles = (
+                        oldVideofileNames != newVideofileNames ||
+                        oldSelectionIndex != newSelectionIndex
+                    )
+                    _playbackSetupOptions = fullMessage.playbackSetupOptions
+                    Log.d("shit", "$oldVideofileNames $newVideofileNames")
+                    if (shouldSetVideofiles) {
+                        Log.d("shit", "onSetVideofiles is null = ${messageEvents.onSetVideofilesMessage == null}")
+                        val missingFiles = messageEvents.onSetVideofilesMessage?.invoke(
+                            newVideofileNames,
+                            newSelectionIndex
+                        ) ?: listOf()
+                        _meAsWatcher = _meAsWatcher.copy(missingVideofileNames = missingFiles)
+                        Log.d("shit", "missing files: $missingFiles")
+                        sendDoNotHaveVideofiles(
+                            videofileNames = missingFiles,
+                            to = sender
+                        )
+                    }
                 }
                 is AllWatchersUpdateMessage -> {
                     val host = fullMessage.allWatchers
                         .find { it.endpointId == sender.endpointId }!!
+                    val me = fullMessage.allWatchers
+                        .find { it.endpointId == _meAsWatcher.endpointId }!!
                     val others = fullMessage.allWatchers
                         .filter { it.endpointId != _meAsWatcher.endpointId }
                     _playbackSetupState.update { it.copy(
                         hostAsWatcher = host,
+                        meAsWatcher = me,
                         otherWatchers = others
                     ) }
                 }
                 is OpenPlayerMessage -> {
                     messageEvents.onOpenPlayerMessage?.invoke()
+                }
+                is PlaybackPauseUnpauseMessage -> {
+                    messageEvents.onPauseUnpauseMessage?.invoke(fullMessage)
                 }
             }
         }
@@ -293,21 +394,49 @@ class PlaybackSetupViewModel @Inject constructor(
             to.sendMessage(msg)
         }
 
-        fun sendAllWatchersUpdate() {
+        fun sendAllWatchersUpdate(to: List<RunningConnection>) {
             val allWatchers = listOf(_meAsWatcher) + _otherWatchers
             val allWatchersUpdateMessage = AllWatchersUpdateMessage(allWatchers)
             val msg = messageConverter.encode(allWatchersUpdateMessage)
             connectionsAdvertiser.sendMessageToMultiple(
                 msg = msg,
-                receivers = connectionsAdvertiser.advertiserState.value.runningConnections
+                receivers = to
             )
+        }
+
+        fun sendAllWatchersUpdate() {
+            sendAllWatchersUpdate(to = _allRunningConnections)
+        }
+
+        fun sendPlaybackSetupOptionsUpdate(to: List<Watcher>) {
+            val receiverIds = to.map { it.endpointId }
+            val receivers = _allRunningConnections
+                .filter { it.endpointId in receiverIds }
+            val optionsUpdateMessage =  PlaybackSetupOptionsUpdateMessage(_playbackSetupOptions)
+            val msg = messageConverter.encode(optionsUpdateMessage)
+            connectionsAdvertiser.sendMessageToMultiple(msg, receivers)
+        }
+
+        fun sendPlaybackSetupOptionsUpdate(to: Watcher) {
+            sendPlaybackSetupOptionsUpdate(to = listOf(to))
+        }
+
+        fun sendPlaybackSetupOptionsUpdate() {
+            val approvedWatchers = _otherWatchers.filter { it.isApproved }
+            sendPlaybackSetupOptionsUpdate(to = approvedWatchers)
+        }
+
+        private fun sendDoNotHaveVideofiles(videofileNames: List<String>, to: RunningConnection) {
+            val doNotHaveVideofilesMessage = DoNotHaveVideofilesMessage(videofileNames)
+            val msg = messageConverter.encode(doNotHaveVideofilesMessage)
+            to.sendMessage(msg)
         }
 
         fun sendOpenPlayer() {
             val approvedWatcherIds = _otherWatchers
                 .filter { it.isApproved }
                 .map { it.endpointId }
-            val receivers = connectionsAdvertiser.advertiserState.value.runningConnections
+            val receivers = _allRunningConnections
                 .filter { it.endpointId in approvedWatcherIds }
             val openPlayerMsg = OpenPlayerMessage()
             val msg = messageConverter.encode(openPlayerMsg)
@@ -317,7 +446,9 @@ class PlaybackSetupViewModel @Inject constructor(
 
     private fun getEmptyMessageEvents() = object : PlaybackSetupMessageEvents {
         override var onOpenPlayerMessage: (() -> Unit)? = null
-        override var onSetVideofilesMessage: ((List<String>) -> Unit)? = null
+        override var onSetVideofilesMessage: ((List<String>, Int) -> List<String>)? = null
+        override var onPlaybackSetupOptionsUpdateMessage: ((PlaybackSetupOptions) -> Unit)? = null
+        override var onPauseUnpauseMessage: ((PlaybackPauseUnpauseMessage) -> Unit)? = null
     }
 }
 
@@ -328,6 +459,7 @@ data class PlaybackSetupState(
     val hostAsWatcher: Watcher,
     val meAsWatcher: Watcher,
     val otherWatchers: List<Watcher>,
+    val playbackSetupOptions: PlaybackSetupOptions,
 )
 
 
@@ -337,12 +469,23 @@ data class Watcher(
     val username: String,
     val messagingVersion: Int,
     val isApproved: Boolean,
-    val videofilesNotFound: Boolean,
+    val missingVideofileNames: List<String>,
+)
+
+@Serializable
+data class PlaybackSetupOptions(
+    val videofileNames: List<String>,
+    val selectedVideofileIndex: Int,
+    val doStream: Boolean,
+    val playbackSpeed: Float,
+    val repeatMode: @Player.RepeatMode Int,
 )
 
 interface PlaybackSetupMessageEvents {
     var onOpenPlayerMessage: (() -> Unit)?
-    var onSetVideofilesMessage: ((List<String>) -> Unit)?
+    var onSetVideofilesMessage: ((List<String>, Int) -> List<String>)?
+    var onPlaybackSetupOptionsUpdateMessage: ((PlaybackSetupOptions) -> Unit)?
+    var onPauseUnpauseMessage: ((PlaybackPauseUnpauseMessage) -> Unit)?
 }
 
 enum class SetupMode {

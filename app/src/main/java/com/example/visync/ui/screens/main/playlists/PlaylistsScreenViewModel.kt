@@ -1,94 +1,84 @@
 package com.example.visync.ui.screens.main.playlists
 
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.visync.data.files.VideoMetadataReader
+import com.example.visync.metadata.MetadataReader
 import com.example.visync.data.playlists.Playlist
 import com.example.visync.data.playlists.PlaylistWithVideofiles
 import com.example.visync.data.playlists.PlaylistsRepository
 import com.example.visync.data.videofiles.Videofile
 import com.example.visync.data.videofiles.VideofilesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class PlaylistsScreenViewModel @Inject constructor(
     private val playlistsRepository: PlaylistsRepository,
     private val videofilesRepository: VideofilesRepository,
-    private val videoMetadataReader: VideoMetadataReader,
+    private val metadataReader: MetadataReader,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(PlaylistsUiState(loading = true))
-    val uiState: StateFlow<PlaylistsUiState> = _uiState
+    private val debounceDelay = 100L
+    private val sharingStopDelay = 5000L
 
-    private var _playlistToVideoFiles: Map<Playlist, List<Videofile>> = emptyMap()
+    private var _selectedPlaylistUpdateJob: Job? = null
+    private var _selectedPlaylist = MutableStateFlow<PlaylistWithVideofiles?>(null)
+
+    val uiState: StateFlow<PlaylistsUiState>
 
     private var _playlistOrdering = PlaylistOrdering.ID_ASC
     private val alwaysApplyCorrectOrder = true
 
     init {
-        observePlaylists()
-        observeVideofiles()
-    }
-
-    private fun observePlaylists() {
-        viewModelScope.launch {
-            playlistsRepository.playlists.collect { playlists ->
-                updatePlaylistsMap(
+        uiState = playlistsRepository.playlists
+            .catch {
+                Log.e(
+                    PlaylistsScreenViewModel::class.simpleName,
+                    "Failed to receive update from repository",
+                    it
+                )
+            }
+            .debounce(debounceDelay)
+            .combine(_selectedPlaylist) { playlists, selectedPlaylist ->
+                selectedPlaylist?.videofiles?.filterNot {
+                    metadataReader.isContentUriValid(it.uri)
+                }?.let { unavailableVideofiles ->
+                    unavailableVideofiles.ifEmpty { return@let }
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val videofilesAsArray = unavailableVideofiles.toTypedArray()
+                        videofilesRepository.removeVideofiles(*videofilesAsArray)
+                    }
+                }
+                PlaylistsUiState(
                     playlists = playlists,
-                    videofiles = videofilesRepository.videofiles.value,
-                    applyCorrectOrdering = alwaysApplyCorrectOrder,
+                    selectedPlaylist = selectedPlaylist,
+                    loading = false
                 )
-                refreshPlaylistsContent()
             }
-        }
-    }
-
-    private fun observeVideofiles() {
-        viewModelScope.launch {
-            videofilesRepository.videofiles.collect { videofiles ->
-                updatePlaylistsMap(
-                    playlists = playlistsRepository.playlists.value,
-                    videofiles = videofiles,
-                    applyCorrectOrdering = alwaysApplyCorrectOrder,
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(sharingStopDelay),
+                PlaylistsUiState(
+                    playlists = emptyList(),
+                    selectedPlaylist = null,
+                    loading = true
                 )
-                refreshPlaylistsContent()
-            }
-        }
+            )
     }
-
-    private fun updatePlaylistsMap(
-        playlists: List<Playlist>,
-        videofiles: List<Videofile>,
-        @Suppress("SameParameterValue")
-        applyCorrectOrdering: Boolean,
-    ) {
-        _playlistToVideoFiles = mapPlaylistsToVideofiles(
-            playlists = playlists,
-            videofiles = videofiles,
-            applyCorrectOrdering = applyCorrectOrdering
-        )
-    }
-
-    private fun mapPlaylistsToVideofiles(
-        playlists: List<Playlist>,
-        videofiles: List<Videofile>,
-        applyCorrectOrdering: Boolean,
-    ): Map<Playlist, List<Videofile>> {
-        val processedPlaylists = if (applyCorrectOrdering) {
-            playlistsOrdered(playlists)
-        } else {
-            playlists
-        }
-        return processedPlaylists.associateWith { playlist ->
-            videofiles.filter { it.playlistId == playlist.id }
-        }
-    }
-
 
     private fun playlistsOrdered(
         playlists: List<Playlist>
@@ -106,7 +96,7 @@ class PlaylistsScreenViewModel @Inject constructor(
             Playlist::class -> {
                 val currentComparison: (Playlist) -> Comparable<*> = {
                     when (playlistOrdering) {
-                        PlaylistOrdering.ID_ASC -> { it.id}
+                        PlaylistOrdering.ID_ASC -> { it.playlistId}
                         PlaylistOrdering.NAME_ASC -> { it.name}
                     }
                 }
@@ -115,7 +105,7 @@ class PlaylistsScreenViewModel @Inject constructor(
             PlaylistWithVideofiles::class -> {
                 val currentComparison: (PlaylistWithVideofiles) -> Comparable<*> = {
                     when (playlistOrdering) {
-                        PlaylistOrdering.ID_ASC -> { it.playlist.id}
+                        PlaylistOrdering.ID_ASC -> { it.playlist.playlistId}
                         PlaylistOrdering.NAME_ASC -> { it.playlist.name}
                     }
                 }
@@ -133,65 +123,62 @@ class PlaylistsScreenViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Checks whether uiState is in sync with current playlist to videofiles map
-     * and if not, updates it.
-     */
-    fun refreshPlaylistsContent() {
-        val newPlaylists = _playlistToVideoFiles.map {
-            PlaylistWithVideofiles(
-                playlist = it.key,
-                videofiles = it.value
-            )
+    fun addPlaylist(playlist: Playlist) {
+        viewModelScope.launch(Dispatchers.IO) {
+            playlistsRepository.tryAddPlaylist(playlist)
         }
-        if (newPlaylists == _uiState.value.playlists) {
-            return
-        }
-
-        val newSelectedPlaylist = _uiState.value.selectedPlaylist?.let { oldSelection ->
-            newPlaylists.find { it.playlist.id == oldSelection.playlist.id }
-        }
-
-        _uiState.value = PlaylistsUiState(
-            playlists = newPlaylists,
-            selectedPlaylist = newSelectedPlaylist
-        )
     }
 
-    fun addVideoToPlaylistFromUri(playlist: Playlist, uri: Uri) {
-        videofilesRepository.tryAddVideofile(
-            Videofile(
-                id = videofilesRepository.videofiles.value.maxOf { it.id } + 1,
-                uri = uri,
-                filename = videoMetadataReader
-                    .getMetadataFromUri(uri)
-                    ?.filename
-                    ?: "unknown filename",
-                playlistId = playlist.id
+    fun addVideosToPlaylistFromUri(playlist: Playlist, vararg uris: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existingUris = videofilesRepository.selectExistingFromUris(*uris)
+            val onlyNewUris = uris.filterNot { it in existingUris }
+            Log.d(PlaylistsScreenViewModel::class.simpleName, "new uris: $onlyNewUris")
+            val uriMetadataList = onlyNewUris.map { uri ->
+                uri to metadataReader.getVideoMetadataFromUri(uri)
+            }
+            val validVideofiles = uriMetadataList
+                .filter { it.second != null }
+                .map {
+                    Videofile(
+                        videofileId = 0,
+                        uri = it.first,
+                        metadata = it.second!!
+                    )
+                }.toTypedArray()
+            Log.d(PlaylistsScreenViewModel::class.simpleName, "valid videos count: ${validVideofiles.size}")
+            validVideofiles.ifEmpty { return@launch }
+            videofilesRepository.tryAddVideofilesToPlaylist(
+                playlist = playlist,
+                videofiles = validVideofiles
             )
-        )
+        }
+    }
+
+    fun addFolderToPlaylistFromUri(playlist: Playlist, uri: Uri) {
+
     }
 
     fun setSelectedPlaylist(playlistId: Long) {
-        val playlist = uiState.value.playlists.find { it.playlist.id == playlistId }
-        _uiState.value = _uiState.value.copy(
-            selectedPlaylist = playlist,
-        )
+        _selectedPlaylistUpdateJob?.cancel()
+        _selectedPlaylistUpdateJob = viewModelScope.launch(Dispatchers.IO) {
+            playlistsRepository.getPlaylistWithVideofiles(playlistId)
+                .collect {
+                    _selectedPlaylist.value = it
+                }
+        }
     }
 
-    fun closeDetailScreen() {
-        _uiState.value = _uiState
-            .value.copy(
-                selectedPlaylist = null,
-            )
+    fun unselectPlaylist() {
+        _selectedPlaylistUpdateJob?.cancel()
+        _selectedPlaylist.value = null
     }
 }
 
 data class PlaylistsUiState(
-    val playlists: List<PlaylistWithVideofiles> = emptyList(),
-    val selectedPlaylist: PlaylistWithVideofiles? = null,
+    val playlists: List<Playlist>,
+    val selectedPlaylist: PlaylistWithVideofiles?,
     val loading: Boolean = false,
-    val error: String? = null
 )
 
 enum class PlaylistOrdering {

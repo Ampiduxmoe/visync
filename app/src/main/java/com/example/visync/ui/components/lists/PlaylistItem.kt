@@ -11,16 +11,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.visync.data.playlists.Playlist
-import com.example.visync.data.playlists.PlaylistWithVideofiles
 
 @Composable
 fun PlaylistItem(
-    playlistWithVideofiles: PlaylistWithVideofiles,
+    playlist: Playlist,
     onClick: (Playlist) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val playlist = playlistWithVideofiles.playlist
-    val videofiles = playlistWithVideofiles.videofiles
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
@@ -33,7 +30,7 @@ fun PlaylistItem(
             style = MaterialTheme.typography.titleMedium
         )
         Text(
-            text = "${videofiles.count()} files",
+            text = "idk how many files yet",
             style = MaterialTheme.typography.titleSmall
         )
     }

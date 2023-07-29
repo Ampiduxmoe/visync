@@ -23,7 +23,7 @@ fun VideofileItem(
             .clickable { onClick(videofile) }
     ) {
         Text(
-            text = videofile.filename,
+            text = videofile.metadata.filename,
             style = MaterialTheme.typography.titleMedium
         )
         Text(

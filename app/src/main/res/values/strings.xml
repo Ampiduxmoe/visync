@@ -4,6 +4,7 @@
     <!--description strings for actions/buttons/etc-->
     <string name="desc_navigation_drawer">Navigation Drawer</string>
     <string name="desc_back">Back</string>
+    <string name="desc_add_playlist">Add playlist</string>
     <string name="desc_add_video_to_playlist">Add video to the playlist</string>
     <string name="desc_seek_prev">Seek to previous video</string>
     <string name="desc_seek_next">Seek to next video</string>

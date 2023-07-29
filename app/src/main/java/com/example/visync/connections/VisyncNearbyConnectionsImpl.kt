@@ -407,18 +407,12 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "Payload received from endpoint $endpointId (${endpointUsernames[endpointId]})"
-            )
             if (payload.type == Payload.Type.BYTES) {
                 payload.asBytes()?.let { receivedBytes ->
                     val msg = String(receivedBytes, Charsets.UTF_8)
-                    val trimmedMsg = msg.substring(0, maxLogMsgLength.coerceAtMost(msg.length))
-                    val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
                     Log.d(
                         "NearbyConnectionsWrapper",
-                        "Received message: $trimmedMsg$maybeThreeDots"
+                        "Received message: $msg"
                     )
                     val from = connectionsState.value.runningConnections
                         .find { it.endpointId == endpointId }!!

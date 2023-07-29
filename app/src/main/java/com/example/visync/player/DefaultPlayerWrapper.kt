@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 
-class DefaultPlayerWrapper @Inject constructor(
+open class DefaultPlayerWrapper @Inject constructor(
     private val player: Player
 ): PlayerWrapper {
     private val _playbackState = MutableStateFlow(
@@ -33,7 +33,6 @@ class DefaultPlayerWrapper @Inject constructor(
 
     private var isPlayerListenerAdded: Boolean = false
     override var removePlayerListener: () -> Unit = {}
-        private set
 
     init {
         player.prepare()

@@ -1,5 +1,6 @@
 package com.example.visync.messaging
 
+import com.example.visync.ui.screens.player.PlaybackSetupOptions
 import com.example.visync.ui.screens.player.Watcher
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -20,14 +21,18 @@ class JsonVisyncMessageConverter {
     fun decode(msg: String): VisyncMessage {
         val baseVisyncMessage = jsonIgnoreUnknownKeys.decodeFromString<VisyncMessage>(msg)
         return when (baseVisyncMessage.type) {
-            TextMessage::class.simpleName               -> decodeAs<TextMessage>(msg)
-            RequestSelfInfoMessage::class.simpleName    -> decodeAs<RequestSelfInfoMessage>(msg)
-            SelfInfoMessage::class.simpleName           -> decodeAs<SelfInfoMessage>(msg)
-            AllWatchersUpdateMessage::class.simpleName  -> decodeAs<AllWatchersUpdateMessage>(msg)
-            VersionMessage::class.simpleName            -> decodeAs<VersionMessage>(msg)
-            RequestVersionMessage::class.simpleName     -> decodeAs<RequestVersionMessage>(msg)
-            OpenPlayerMessage::class.simpleName         -> decodeAs<OpenPlayerMessage>(msg)
-            SetVideofilesMessage::class.simpleName      -> decodeAs<SetVideofilesMessage>(msg)
+            TextMessage::class.simpleName                       -> decodeAs<TextMessage>(msg)
+            RequestSelfInfoMessage::class.simpleName            -> decodeAs<RequestSelfInfoMessage>(msg)
+            SelfInfoMessage::class.simpleName                   -> decodeAs<SelfInfoMessage>(msg)
+            AllWatchersUpdateMessage::class.simpleName          -> decodeAs<AllWatchersUpdateMessage>(msg)
+            VersionMessage::class.simpleName                    -> decodeAs<VersionMessage>(msg)
+            RequestVersionMessage::class.simpleName             -> decodeAs<RequestVersionMessage>(msg)
+            PlaybackSetupOptionsUpdateMessage::class.simpleName -> decodeAs<PlaybackSetupOptionsUpdateMessage>(msg)
+            DoNotHaveVideofilesMessage::class.simpleName        -> decodeAs<DoNotHaveVideofilesMessage>(msg)
+            OpenPlayerMessage::class.simpleName                 -> decodeAs<OpenPlayerMessage>(msg)
+            PlaybackPauseUnpauseMessage::class.simpleName       -> decodeAs<PlaybackPauseUnpauseMessage>(msg)
+            PlaybackSeekToMessage::class.simpleName             -> decodeAs<PlaybackSeekToMessage>(msg)
+            PlaybackSeekToPrevNextMessage::class.simpleName     -> decodeAs<PlaybackSeekToPrevNextMessage>(msg)
             else -> {
                 throw IllegalArgumentException("Could not match message to any message type")
             }
@@ -83,6 +88,20 @@ class RequestVersionMessage(
 )
 
 @Serializable
+class PlaybackSetupOptionsUpdateMessage(
+    val playbackSetupOptions: PlaybackSetupOptions
+) : VisyncMessage(
+    type = PlaybackSetupOptionsUpdateMessage::class.simpleName!!
+)
+
+@Serializable
+class DoNotHaveVideofilesMessage(
+    val videofileNames: List<String>
+) : VisyncMessage(
+    type = DoNotHaveVideofilesMessage::class.simpleName!!
+)
+
+@Serializable
 class OpenPlayerMessage(
 
 ) : VisyncMessage(
@@ -90,8 +109,23 @@ class OpenPlayerMessage(
 )
 
 @Serializable
-class SetVideofilesMessage(
-    val videofileNames: List<String>
+class PlaybackPauseUnpauseMessage(
+    val doPause: Boolean
 ) : VisyncMessage(
-    type = SetVideofilesMessage::class.simpleName!!
+    type = PlaybackPauseUnpauseMessage::class.simpleName!!
+)
+
+@Serializable
+class PlaybackSeekToMessage(
+    val seekToLong: Long?,
+    val seekToFloat: Float?,
+) : VisyncMessage(
+    type = PlaybackSeekToMessage::class.simpleName!!
+)
+
+@Serializable
+class PlaybackSeekToPrevNextMessage(
+    val toPrev: Boolean
+) : VisyncMessage(
+    type = PlaybackSeekToPrevNextMessage::class.simpleName!!
 )

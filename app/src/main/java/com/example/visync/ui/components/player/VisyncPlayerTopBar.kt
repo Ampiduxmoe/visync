@@ -43,10 +43,10 @@ fun VisyncPlayerTopBar(
             return
         }
         if (selectedVideofile.uri == Uri.EMPTY) {
-            Text("you selected dummy videofile (${selectedVideofile.filename})")
+            Text("you selected dummy videofile (${selectedVideofile.metadata.filename})")
             return
         }
-        Text("now playing ${selectedVideofile.filename}")
+        Text("now playing ${selectedVideofile.metadata.filename}")
         Text("current speed = $playbackSpeed")
         Text("0.2x speed", modifier = Modifier.clickable { setPlaybackSpeed(0.2f)
             onAnyInteraction() })

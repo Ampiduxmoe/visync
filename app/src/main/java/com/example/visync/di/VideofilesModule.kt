@@ -1,6 +1,7 @@
 package com.example.visync.di
 
-import com.example.visync.data.videofiles.FakeVideofilesRepository
+import com.example.visync.data.videofiles.DbVideofilesRepository
+import com.example.visync.data.videofiles.VideofileDao
 import com.example.visync.data.videofiles.VideofilesRepository
 import dagger.Module
 import dagger.Provides
@@ -14,7 +15,7 @@ object VideofilesModule {
 
     @Singleton
     @Provides
-    fun provideVideofilesRepository(): VideofilesRepository {
-        return FakeVideofilesRepository()
+    fun provideVideofilesRepository(videofileDao: VideofileDao): VideofilesRepository {
+        return DbVideofilesRepository(videofileDao)
     }
 }

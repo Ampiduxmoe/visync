@@ -3,7 +3,9 @@ package com.example.visync.ui.screens.main.playlists
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.Companion.isPhotoPickerAvailable
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -15,15 +17,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color.Companion.Red
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.visync.R
@@ -50,7 +62,8 @@ fun PlaylistsScreen(
     playlistsUiState: PlaylistsUiState,
     openPlaylist: (Playlist) -> Unit,
     closePlaylist: () -> Unit,
-    addVideoToPlaylistFromUri: (Playlist, Uri) -> Unit,
+    addPlaylist: (Playlist) -> Unit,
+    addVideosToPlaylistFromUri: (Playlist, List<Uri>) -> Unit,
     playVideofile: (Videofile) -> Unit,
     openDrawer: () -> Unit,
 ) {
@@ -73,7 +86,7 @@ fun PlaylistsScreen(
                     )
                     PlaylistDetails(
                         playlistWithVideofiles = playlistWithVideofiles,
-                        addVideoToPlaylistFromUri = addVideoToPlaylistFromUri,
+                        addVideosToPlaylistFromUri = addVideosToPlaylistFromUri,
                         playVideofile = playVideofile
                     )
                 }
@@ -94,7 +107,8 @@ fun PlaylistsScreen(
                 Playlists(
                     playlists = playlistsUiState.playlists,
                     selectedPlaylist = null,
-                    playlistOnClick = openPlaylist
+                    playlistOnClick = openPlaylist,
+                    addPlaylist = addPlaylist
                 )
             }
         }
@@ -112,6 +126,7 @@ fun PlaylistsScreen(
                             openPlaylist(it)
                         }
                     },
+                    addPlaylist = addPlaylist,
                     modifier = Modifier
                         .weight(1f)
                         .padding(8.dp)
@@ -127,7 +142,7 @@ fun PlaylistsScreen(
                         mutableStateOf(
                             PlaylistWithVideofiles(
                                 playlist = Playlist(
-                                    id = -1,
+                                    playlistId = -1,
                                     name = ""
                                 ),
                                 videofiles = listOf()
@@ -141,9 +156,11 @@ fun PlaylistsScreen(
                     }
                     PlaylistDetails(
                         playlistWithVideofiles = lastSelection.value,
-                        addVideoToPlaylistFromUri = addVideoToPlaylistFromUri,
+                        addVideosToPlaylistFromUri = addVideosToPlaylistFromUri,
                         playVideofile = playVideofile,
-                        modifier = Modifier.fillMaxWidth(0.5f).padding(8.dp)
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .padding(8.dp)
                     )
                 }
             }
@@ -152,26 +169,94 @@ fun PlaylistsScreen(
 
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun Playlists(
-    playlists: List<PlaylistWithVideofiles>,
+    playlists: List<Playlist>,
     selectedPlaylist: PlaylistWithVideofiles?,
     playlistOnClick: (Playlist) -> Unit,
+    addPlaylist: (Playlist) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(
-        modifier = modifier
-    ) {
-        items(playlists) { playlist ->
-            PlaylistItem(
-                playlistWithVideofiles = playlist,
-                onClick = playlistOnClick,
-                modifier = if (playlist != selectedPlaylist) Modifier else
-                    Modifier.background(
+    val showCreatePlaylistDialog = remember { mutableStateOf(false) }
+    if (showCreatePlaylistDialog.value) {
+        AlertDialog(
+            onDismissRequest = {
+                // Dismiss the dialog when the user clicks outside the dialog or on the back
+                // button. If you want to disable that functionality, simply use an empty
+                // onDismissRequest.
+
+            }
+        ) {
+            Surface(
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .wrapContentHeight(),
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = AlertDialogDefaults.TonalElevation
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "add playlist with this name.....",
+                    )
+                    val playlistNameInputText = remember { mutableStateOf("") }
+                    TextField(
+                        value = playlistNameInputText.value,
+                        onValueChange = {
+                            playlistNameInputText.value = it
+                        }
+                    )
+                    Row {
+                        TextButton(
+                            onClick = {
+                                showCreatePlaylistDialog.value = false
+                                playlistNameInputText.value = ""
+                            }
+                        ) {
+                            Text("Cancel")
+                        }
+                        TextButton(
+                            onClick = {
+                                if (playlistNameInputText.value != "") {
+                                    addPlaylist(
+                                        Playlist(
+                                            playlistId = 0,
+                                            name = playlistNameInputText.value,
+                                        )
+                                    )
+                                }
+                                showCreatePlaylistDialog.value = false
+                                playlistNameInputText.value = ""
+                            }
+                        ) {
+                            Text("Confirm")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Column {
+        IconButton(onClick = { showCreatePlaylistDialog.value = true }) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = stringResource(id = R.string.desc_add_playlist)
+            )
+        }
+        LazyColumn(
+            modifier = modifier
+        ) {
+            items(playlists) { playlist ->
+                PlaylistItem(
+                    playlist = playlist,
+                    onClick = playlistOnClick,
+                    modifier = if (playlist != selectedPlaylist?.playlist) Modifier
+                    else Modifier.background(
                         color = Red,
                         shape = RectangleShape
                     )
-            )
+                )
+            }
         }
     }
 }
@@ -179,25 +264,34 @@ fun Playlists(
 @Composable
 fun PlaylistDetails(
     playlistWithVideofiles: PlaylistWithVideofiles,
-    addVideoToPlaylistFromUri: (Playlist, Uri) -> Unit,
+    addVideosToPlaylistFromUri: (Playlist, List<Uri>) -> Unit,
     playVideofile: (Videofile) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val selectVideoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
+    val modernVideoPickerLauncher =  rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(),
+        onResult = { uris ->
+            uris.ifEmpty { return@rememberLauncherForActivityResult }
+            addVideosToPlaylistFromUri(playlistWithVideofiles.playlist, uris)
+        }
+    )
+    val selectFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree(),
         onResult = { uri ->
             uri?.let {
-                addVideoToPlaylistFromUri(
-                    playlistWithVideofiles.playlist,
-                    uri
-                )
+                TODO()
             }
         }
     )
     Column(
         modifier = modifier
     ) {
-        IconButton(onClick = { selectVideoLauncher.launch("video/*") }) {
+        IconButton(
+            onClick = {
+                val videoOnly = ActivityResultContracts.PickVisualMedia.VideoOnly
+                modernVideoPickerLauncher.launch(PickVisualMediaRequest(videoOnly))
+            }
+        ) {
             Icon(
                 imageVector = Icons.Filled.Add,
                 contentDescription = stringResource(id = R.string.desc_add_video_to_playlist)
