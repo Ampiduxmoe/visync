@@ -5,7 +5,7 @@
     <string name="desc_navigation_drawer">Navigation Drawer</string>
     <string name="desc_back">Back</string>
     <string name="desc_add_playlist">Add playlist</string>
-    <string name="desc_add_video_to_playlist">Add video to the playlist</string>
+    <string name="desc_select_videofiles">Select videofiles to play</string>
     <string name="desc_seek_prev">Seek to previous video</string>
     <string name="desc_seek_next">Seek to next video</string>
     <string name="desc_pause">Pause video</string>
@@ -21,9 +21,12 @@
     <string name="desc_search_button">Search Button</string>
 
     <!--tab labels are for navigation buttons-->
-    <string name="tab_label_player">Player</string>
     <string name="tab_label_playback_setup">Play</string>
     <string name="tab_label_rooms_join">Join</string>
+
+    <string name="tab_label_setup_select_files">Select files</string>
+    <string name="tab_label_setup_settings">Playback settings</string>
+    <string name="tab_label_setup_people">People</string>
 
     <string name="tab_label_my_profile">Profile</string>
     <string name="tab_label_my_friends">Friends</string>
@@ -31,7 +34,6 @@
     <string name="tab_label_app_settings">Settings</string>
 
     <!--tab names are what top app bar should show-->
-    <string name="tab_name_player">Player</string>
     <string name="tab_name_playback_setup">Playback setup</string>
     <string name="tab_name_rooms_join">Rooms</string>
 

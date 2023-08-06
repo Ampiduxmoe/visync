@@ -15,12 +15,15 @@ import androidx.compose.ui.graphics.RectangleShape
 import com.example.visync.data.videofiles.Videofile
 import com.example.visync.player.PlayerWrapperPlaybackControls
 import com.example.visync.player.PlayerWrapperPlaybackState
+import com.example.visync.ui.PlayerMessageSender
 
 @Composable
 fun VisyncPlayerOverlay(
     selectedVideofile: Videofile?,
     playbackState: PlayerWrapperPlaybackState,
     playbackControls: PlayerWrapperPlaybackControls,
+    isUserHost: Boolean,
+    messageSender: PlayerMessageSender,
     onOverlayClicked: () -> Unit,
     closePlayer: () -> Unit,
     modifier: Modifier = Modifier,
@@ -58,7 +61,7 @@ fun VisyncPlayerOverlay(
         Column(modifier = backgroundModifier) {
             VideoProgressSliderWrapper(
                 useAnimatedSlider = true,
-                adjustPlaybackSpeed = false,
+                adjustAnimation = false,
                 currentVideoDuration = playbackState.currentVideoDuration,
                 currentPosition = playbackState.currentPosition,
                 currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
@@ -71,10 +74,30 @@ fun VisyncPlayerOverlay(
             )
             VisyncPlayerBottomControls(
                 isVideoPlaying = playbackState.isPlaying,
-                pause = playbackControls::pause,
-                unpause = playbackControls::unpause,
-                seekToPrev = playbackControls::seekToPrevious,
-                seekToNext = playbackControls::seekToNext,
+                pause = {
+                    if (isUserHost) {
+                        messageSender.sendPauseMessage()
+                    }
+                    playbackControls.pause()
+                },
+                unpause = {
+                    if (isUserHost) {
+                        messageSender.sendUnpauseMessage()
+                    }
+                    playbackControls.unpause()
+                },
+                seekToPrev = {
+                    if (isUserHost) {
+
+                    }
+                    playbackControls.seekToPrevious()
+                },
+                seekToNext = {
+                    if (isUserHost) {
+
+                    }
+                    playbackControls.seekToNext()
+                },
                 onAnyInteraction = onOverlayClicked,
                 modifier = Modifier.fillMaxWidth()
             )

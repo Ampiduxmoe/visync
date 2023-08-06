@@ -13,7 +13,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import com.example.visync.R
 
-class AppNavigationActions(private val navController: NavHostController) {
+class VisyncNavigationActions(private val navController: NavHostController) {
 
     fun navigateTo(destination: String) {
         navController.navigate(destination) {

@@ -1,12 +1,12 @@
 package com.example.visync.metadata
 
-import android.app.Application
+import android.content.Context
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
 
 class VisyncMetadataReader(
-    private val app: Application
+    private val context: Context
 ): MetadataReader {
 
     override fun getVideoMetadataFromUri(contentUri: Uri): VideoMetadata? {
@@ -19,7 +19,7 @@ class VisyncMetadataReader(
         }
         val displayNameCol = MediaStore.Video.VideoColumns.DISPLAY_NAME
         val durationCol = MediaStore.Video.VideoColumns.DURATION
-        return app.contentResolver
+        return context.contentResolver
             .query(
                 /* uri = */ contentUri,
                 /* projection = */ arrayOf(displayNameCol, durationCol),

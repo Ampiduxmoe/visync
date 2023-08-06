@@ -16,16 +16,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -46,7 +54,6 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.visync.connections.DiscoveredEndpoint
 import com.example.visync.connections.RunningConnection
 import com.example.visync.connections.VisyncNearbyConnections
 import com.example.visync.connections.VisyncNearbyConnectionsListener
@@ -54,9 +61,17 @@ import com.example.visync.data.videofiles.Videofile
 import com.example.visync.messaging.JsonVisyncMessageConverter
 import com.example.visync.messaging.OpenPlayerMessage
 import com.example.visync.messaging.TextMessage
+import com.example.visync.player.PlayerWrapperPlaybackControls
+import com.example.visync.ui.PlaybackSetupOutput
+import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.MainAppNavigation
 import com.example.visync.ui.components.navigation.NavigationType
+import com.example.visync.ui.getPlayerMessageSender
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupOptionSetters
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupScreen
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupViewModel
+import com.example.visync.ui.screens.main.playback_setup.SetupMode
 import com.example.visync.ui.screens.main.rooms.RoomsScreen
 import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -69,8 +84,8 @@ fun MainApp(
     windowSize: WindowSizeClass,
     mainAppUiState: MainAppUiState,
     mainAppNavigationUiState: MainAppNavigationUiState,
-    playPlaylist: (PlaybackStartOptions) -> Unit,
-    roomDiscoveringActions: RoomDiscoveringActions,
+    play: (PlaybackStartOptions, PlaybackSetupOutput) -> Unit,
+    playbackControls: PlayerWrapperPlaybackControls,
 ) {
     val navigationType: NavigationType
     val preferredDisplayMode: ContentDisplayMode
@@ -97,7 +112,56 @@ fun MainApp(
         }
     }
 
+    val playbackSetupViewModel = hiltViewModel<PlaybackSetupViewModel>()
+    val playbackSetupState by playbackSetupViewModel
+        .playbackSetupState.collectAsStateWithLifecycle()
+    val playbackSetupConnections = playbackSetupViewModel.visyncNearbyConnections
+    val connectionsState by playbackSetupConnections
+        .connectionsState.collectAsStateWithLifecycle()
+
     val navController = rememberNavController()
+    val navActions = VisyncNavigationActions(navController)
+
+    val playbackSetupOptionSetters = remember {
+        PlaybackSetupOptionSetters(
+            setSelectedVideofiles = { videofiles ->
+                playbackSetupViewModel.setVideofilesAndNotifyIfHost(
+                    videofiles = videofiles,
+                    startFrom = 0
+                )
+            },
+            addToSelectedVideofiles = { videofiles ->
+                playbackSetupViewModel.addVideofilesAndNotifyIfHost(
+                    videofiles = videofiles
+                )
+            },
+            setSelectedFileIndex = { index ->
+                val currentVideofiles = playbackSetupState.selectedVideofiles
+                playbackSetupViewModel.setVideofilesAndNotifyIfHost(
+                    videofiles = currentVideofiles,
+                    startFrom = index
+                )
+            },
+            setDoStream = { doStream ->
+                playbackSetupViewModel.setDoStream(doStream)
+            },
+            setPlaybackSpeed = { playbackSpeed ->
+                playbackSetupViewModel.setPlaybackSpeed(playbackSpeed)
+            },
+            toggleRepeatMode = {
+                val repeatMode = playbackSetupState.playbackSetupOptions.repeatMode
+                val newRepeatMode = (repeatMode + 1) % 3
+                playbackSetupViewModel.setRepeatMode(newRepeatMode)
+            }
+        )
+    }
+    val messageSender = remember {
+        getPlayerMessageSender(
+            playbackSetupViewModel = playbackSetupViewModel,
+            playbackSetupConnections = playbackSetupConnections
+        )
+    }
+
     MainAppNavigation(
         uiState = mainAppNavigationUiState,
         navigationType = navigationType,
@@ -109,30 +173,143 @@ fun MainApp(
             modifier = Modifier.fillMaxSize(),
         ) {
             composable(Route.PlaybackSetup.routeString) {
+                val username = mainAppNavigationUiState.editableUsername.value
+                val context = LocalContext.current
 
+                val isInGuestMode = playbackSetupState.setupMode == SetupMode.GUEST
+                val isConnected = connectionsState.runningConnections.isNotEmpty()
+                val showConfirmTransitionToHostDialog = isInGuestMode && isConnected
+                val transitionToHost = {
+                    playbackSetupViewModel.fullResetToHostMode()
+                    playbackSetupViewModel.resetMessageEvents()
+                }
+                if (showConfirmTransitionToHostDialog) {
+                    AlertOngoingGuestSetup(
+                        onCancel = { navActions.back() },
+                        onConfirm = { transitionToHost() }
+                    )
+                    return@composable
+                } else if (isInGuestMode) {
+                    transitionToHost()
+                }
+                PlaybackSetupScreen(
+                    playbackSetupState = playbackSetupState,
+                    approveWatcher = playbackSetupViewModel::approveWatcher,
+                    disapproveWatcher = playbackSetupViewModel::disapproveWatcher,
+                    playbackSetupOptionSetters = playbackSetupOptionSetters,
+                    startAdvertising =  {
+                        playbackSetupConnections.startAdvertising(username, context)
+                    },
+                    play = {
+                        val playbackSetupOptions = playbackSetupState.playbackSetupOptions
+                        playbackSetupViewModel.sendOpenPlayer()
+                        play(
+                            PlaybackStartOptions(
+                                videofiles = playbackSetupState.selectedVideofiles,
+                                startFrom = playbackSetupOptions.selectedVideofileIndex,
+                                playbackSpeed = playbackSetupOptions.playbackSpeed
+                            ),
+                            PlaybackSetupOutput(
+                                isUserHost = true,
+                                resetAllConnections = playbackSetupConnections::reset,
+                                messageSender = messageSender
+                            )
+                        )
+                        playbackSetupConnections.stopAdvertising()
+                   },
+                )
             }
             composable(Route.RoomsJoin.routeString) {
                 val roomsScreenViewModel = hiltViewModel<RoomsScreenViewModel>()
                 val roomsUiState by roomsScreenViewModel
                     .uiState.collectAsStateWithLifecycle()
-                DisposableEffect(Unit) {
-                    onDispose {
-                        roomDiscoveringActions.stopDiscovering()
-                        roomsScreenViewModel.clearDiscoveredRooms()
+
+                val showConfirmDiscoveryDialog = remember { mutableStateOf(false) }
+
+                val username = mainAppNavigationUiState.editableUsername.value
+                val context = LocalContext.current
+                val transitionToGuestModeAndDiscover = {
+                    playbackSetupViewModel.fullResetToGuestMode()
+                    playbackSetupConnections.startDiscovering(username, context)
+                    playbackSetupViewModel.messageEvents.apply {
+                        onOpenPlayerMessage = {
+                            val playbackSetupOptions = playbackSetupState.playbackSetupOptions
+                            play(
+                                PlaybackStartOptions(
+                                    videofiles = playbackSetupState.selectedVideofiles,
+                                    startFrom = playbackSetupOptions.selectedVideofileIndex,
+                                    playbackSpeed = playbackSetupOptions.playbackSpeed
+                                ),
+                                PlaybackSetupOutput(
+                                    isUserHost = false,
+                                    resetAllConnections = playbackSetupConnections::reset,
+                                    messageSender = messageSender
+                                )
+                            )
+                        }
+                        onPauseUnpauseMessage = { message ->
+                            when (message.doPause) {
+                                true -> { playbackControls.pause() }
+                                false -> { playbackControls.unpause() }
+                            }
+                        }
                     }
                 }
-                IconButton(
-                    onClick = { roomDiscoveringActions.startDiscoveringClean() }
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = "start discovering"
+                if (showConfirmDiscoveryDialog.value) {
+                    AlertOngoingHostSetup(
+                        onCancel = {
+                            showConfirmDiscoveryDialog.value = false
+                        },
+                        onConfirm = {
+                            transitionToGuestModeAndDiscover()
+                            showConfirmDiscoveryDialog.value = false
+                        }
                     )
                 }
-                RoomsScreen(
-                    roomsUiState = roomsUiState,
-                    joinRoom = { roomDiscoveringActions.joinRoom(it) }
-                )
+
+                val isInGuestMode = playbackSetupState.setupMode == SetupMode.GUEST
+                val isConnected = connectionsState.runningConnections.isNotEmpty()
+                if (isInGuestMode && isConnected) {
+                    PlaybackSetupScreen(
+                        playbackSetupState = playbackSetupState,
+                        setSelectedVideofilesAsGuest = playbackSetupViewModel::setVideofilesAsGuest
+                    )
+                } else {
+                    DisposableEffect(Unit) {
+                        onDispose {
+                            playbackSetupConnections.stopDiscovering()
+                            roomsScreenViewModel.clearDiscoveredRooms()
+                        }
+                    }
+
+                    if (!connectionsState.isDiscovering) {
+                        IconButton(
+                            onClick = {
+                                val isInHostMode = playbackSetupState.setupMode == SetupMode.HOST
+                                val hasConnections = connectionsState.let {
+                                    (it.connectionRequests + it.runningConnections).isNotEmpty()
+                                }
+                                if (isInHostMode && hasConnections) {
+                                    showConfirmDiscoveryDialog.value = true
+                                } else {
+                                    transitionToGuestModeAndDiscover()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = "start discovering"
+                            )
+                        }
+                    }
+                    RoomsScreen(
+                        roomsUiState = roomsUiState,
+                        joinRoom = {
+                            playbackSetupConnections.stopDiscovering()
+                            it.initiateConnection()
+                        }
+                    )
+                }
             }
             composable(Route.MyProfile.routeString) {
                 Column {
@@ -155,13 +332,13 @@ fun MainApp(
                     sdkVersion = Build.VERSION.SDK_INT,
                     permissionsWithVersions = listOf(
                         Manifest.permission.ACCESS_COARSE_LOCATION  to  1..999,
-                        Manifest.permission.ACCESS_FINE_LOCATION    to 29..32,
+                        Manifest.permission.ACCESS_FINE_LOCATION    to 29..999,
                         Manifest.permission.BLUETOOTH_ADVERTISE     to 31..999,
                         Manifest.permission.BLUETOOTH_CONNECT       to 31..999,
                         Manifest.permission.BLUETOOTH_SCAN          to 31..999,
                         Manifest.permission.NEARBY_WIFI_DEVICES     to 33..999,
 
-                        Manifest.permission.READ_EXTERNAL_STORAGE   to 1..999,
+                        Manifest.permission.READ_EXTERNAL_STORAGE   to 1..32,
                         Manifest.permission.READ_MEDIA_VIDEO        to 33..999,
                     )
                 )
@@ -391,6 +568,88 @@ fun MainApp(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AlertOngoingGuestSetup(
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            // Dismiss the dialog when the user clicks outside the dialog or on the back
+            // button. If you want to disable that functionality, simply use an empty
+            // onDismissRequest.
+        }
+    ) {
+        Surface(
+            modifier = Modifier
+                .wrapContentWidth()
+                .wrapContentHeight(),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = AlertDialogDefaults.TonalElevation
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "You currently have connections, this will remove your guest setup",
+                )
+                Row {
+                    TextButton(
+                        onClick = onCancel
+                    ) {
+                        Text("Cancel")
+                    }
+                    TextButton(
+                        onClick = onConfirm
+                    ) {
+                        Text("Confirm")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AlertOngoingHostSetup(
+    onCancel: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {
+            // Dismiss the dialog when the user clicks outside the dialog or on the back
+            // button. If you want to disable that functionality, simply use an empty
+            // onDismissRequest.
+        }
+    ) {
+        Surface(
+            modifier = Modifier
+                .wrapContentWidth()
+                .wrapContentHeight(),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = AlertDialogDefaults.TonalElevation
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "You currently have connections, this will remove your host setup",
+                )
+                Row {
+                    TextButton(
+                        onClick = onCancel
+                    ) {
+                        Text("Cancel")
+                    }
+                    TextButton(
+                        onClick = onConfirm
+                    ) {
+                        Text("Confirm")
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun pickRequiredPermissions(
     sdkVersion: Int,
     permissionsWithVersions: List<Pair<String, IntRange>>
@@ -413,18 +672,8 @@ enum class ContentDisplayMode {
 class PlaybackStartOptions(
     val videofiles: List<Videofile>,
     val startFrom: Int,
-    val playbackMode: VisyncPlaybackMode,
+    val playbackSpeed: Float,
 )
-
-class RoomDiscoveringActions(
-    val startDiscoveringClean: () -> Unit,
-    val stopDiscovering: () -> Unit,
-    val joinRoom: (DiscoveredEndpoint) -> Unit,
-)
-
-enum class VisyncPlaybackMode {
-    ALONE, GROUP
-}
 
 @HiltViewModel
 class CommunicationTestViewModel @Inject constructor(

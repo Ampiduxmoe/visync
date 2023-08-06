@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,12 +24,10 @@ import com.example.visync.messaging.PlaybackPauseUnpauseMessage
 import com.example.visync.messaging.PlaybackSeekToMessage
 import com.example.visync.messaging.PlaybackSeekToPrevNextMessage
 import com.example.visync.messaging.VisyncMessage
-import com.example.visync.ui.components.navigation.AppNavigationActions
+import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
 import com.example.visync.ui.screens.main.MainAppViewModel
-import com.example.visync.ui.screens.main.RoomDiscoveringActions
-import com.example.visync.ui.screens.main.VisyncPlaybackMode
 import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupViewModel
 import com.example.visync.ui.screens.player.VisyncPlayer
 import com.example.visync.ui.screens.player.VisyncPlayerViewModel
@@ -41,7 +40,7 @@ fun AppWrapper(
 
     val topLevelNavController = rememberNavController()
     val topLevelNavigationActions = remember(topLevelNavController) {
-        AppNavigationActions(topLevelNavController)
+        VisyncNavigationActions(topLevelNavController)
     }
 
     val mainAppViewModel = hiltViewModel<MainAppViewModel>()
@@ -53,18 +52,13 @@ fun AppWrapper(
         mainAppViewModel.initializeNavigationUiState(context)
     }
 
-    val playbackSetupViewModel = hiltViewModel<PlaybackSetupViewModel>()
-    val playbackSetupState by playbackSetupViewModel
-        .playbackSetupState.collectAsStateWithLifecycle()
-    val playbackSetupConnections = playbackSetupViewModel.visyncNearbyConnections
-    val playbackSetupConnectionsState by playbackSetupConnections
-        .connectionsState.collectAsStateWithLifecycle()
-
     val visyncPlayerViewModel = hiltViewModel<VisyncPlayerViewModel>()
     val visyncPlayerUiState by visyncPlayerViewModel
         .uiState.collectAsStateWithLifecycle()
     val visyncPLayerPlaybackState by visyncPlayerViewModel
         .playerWrapper.playbackState.collectAsStateWithLifecycle()
+
+    val finalPlaybackSetupOutput = remember { mutableStateOf<PlaybackSetupOutput?>(null) }
 
     /**
      *  How much time to give to composition process
@@ -85,28 +79,20 @@ fun AppWrapper(
             enterTransition = { fadeIn(snap(transitionDelayMillis)) },
             exitTransition = { ExitTransition.None }
         ) {
+            val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
             MainApp(
                 windowSize = windowSize,
                 mainAppUiState = mainAppUiState,
                 mainAppNavigationUiState = sideNavigationUiState,
-                playPlaylist = { options ->
-                    if (options.playbackMode == VisyncPlaybackMode.ALONE) {
-                        topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
-                        return@MainApp
+                play = { playbackStartOptions, playbackSetupOutput ->
+                    finalPlaybackSetupOutput.value = playbackSetupOutput
+                    playbackStartOptions.let {
+                        playbackControls.setPlaybackSpeed(it.playbackSpeed)
+                        visyncPlayerViewModel.setVideofilesToPlay(it.videofiles, it.startFrom)
                     }
+                    topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
                 },
-                roomDiscoveringActions = RoomDiscoveringActions(
-                    startDiscoveringClean = {
-                        val username = sideNavigationUiState.editableUsername.value
-                        playbackSetupViewModel.fullResetToGuestMode()
-                        playbackSetupConnections.startDiscovering(username, context)
-                    },
-                    stopDiscovering = {
-                        playbackSetupConnections.stopDiscovering()
-                    },
-                    joinRoom = {
-                    }
-                )
+                playbackControls = playbackControls
             )
         }
         composable(
@@ -118,13 +104,15 @@ fun AppWrapper(
                 playerUiState = visyncPlayerUiState,
                 playerPlaybackState = visyncPLayerPlaybackState,
                 playerPlaybackControls = visyncPlayerViewModel.playerWrapper.playbackControls,
+                isUserHost = finalPlaybackSetupOutput.value!!.isUserHost,
                 showOverlay = visyncPlayerViewModel::showOverlay,
                 hideOverlay = visyncPlayerViewModel::hideOverlay,
                 closePlayer = {
                     topLevelNavigationActions.navigateTo(TopLevelRoute.MainApp.routeString)
-                    playbackSetupConnections.reset()
+                    finalPlaybackSetupOutput.value!!.resetAllConnections()
                 },
-                player = visyncPlayerViewModel.playerWrapper.getPlayer()
+                player = visyncPlayerViewModel.playerWrapper.getPlayer(),
+                messageSender = finalPlaybackSetupOutput.value!!.messageSender
             )
         }
     }
@@ -139,7 +127,7 @@ interface PlayerMessageSender {
     fun sendSeekToMessage(seekTo: Long)
 }
 
-fun getHostPlayerMessageSender(
+fun getPlayerMessageSender(
     playbackSetupViewModel: PlaybackSetupViewModel,
     playbackSetupConnections: VisyncNearbyConnections
 ) = object : PlayerMessageSender {
@@ -194,3 +182,9 @@ fun getHostPlayerMessageSender(
         encodeAndSend(seekToMessage)
     }
 }
+
+class PlaybackSetupOutput(
+    val isUserHost: Boolean,
+    val resetAllConnections: () -> Unit,
+    val messageSender: PlayerMessageSender,
+)

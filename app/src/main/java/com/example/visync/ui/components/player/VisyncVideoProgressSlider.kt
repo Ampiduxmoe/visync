@@ -20,7 +20,7 @@ import kotlin.math.abs
 @Composable
 fun VideoProgressSliderWrapper(
     useAnimatedSlider: Boolean,
-    adjustPlaybackSpeed: Boolean,
+    adjustAnimation: Boolean,
     currentVideoDuration: Long,
     currentPosition: Long,
     currentPositionPollingInterval: Int,
@@ -32,7 +32,7 @@ fun VideoProgressSliderWrapper(
     onSliderDragEnd: () -> Unit = {},
 ) {
     if (useAnimatedSlider) {
-        val finalPlaybackSpeed = when (adjustPlaybackSpeed) {
+        val finalPlaybackSpeed = when (adjustAnimation) {
             true -> ensureActualPlaybackSpeedChange(
                 currentPosition = currentPosition,
                 currentPositionPollingInterval = currentPositionPollingInterval,

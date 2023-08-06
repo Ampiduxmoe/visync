@@ -43,7 +43,7 @@ fun MainAppNavigation(
     }
 
     val navigationActions = remember(navController) {
-        AppNavigationActions(navController)
+        VisyncNavigationActions(navController)
     }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val selectedDestination = navBackStackEntry?.destination?.route

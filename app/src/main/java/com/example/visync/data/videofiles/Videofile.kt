@@ -4,7 +4,6 @@ import android.net.Uri
 import com.example.visync.metadata.VideoMetadata
 
 data class Videofile(
-    val videofileId: Long,
     val uri: Uri,
     val metadata: VideoMetadata,
 ) {
