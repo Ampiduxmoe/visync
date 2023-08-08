@@ -39,7 +39,7 @@ open class VisyncNearbyConnectionsListener(
     override fun onIsDiscoveringChanged(isDiscovering: Boolean) { }
     override fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint) { }
     override fun onNewConnectionRequest(request: ConnectionRequest) { }
-    override fun onConnectionError(endpoint: String) { }
+    override fun onConnectionError(endpointId: String) { }
     override fun onNewRunningConnection(connection: RunningConnection) { }
     override fun onRunningConnectionLost(connection: RunningConnection) { }
     override fun onNewMessage(message: String, from: RunningConnection) { }

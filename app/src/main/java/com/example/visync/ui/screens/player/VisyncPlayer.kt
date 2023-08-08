@@ -1,6 +1,7 @@
 package com.example.visync.ui.screens.player
 
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.snap
@@ -35,12 +36,15 @@ import com.google.accompanist.systemuicontroller.rememberSystemUiController
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 
 @Composable
 fun VisyncPlayer(
     playerUiState: VisyncPlayerUiState,
     playerPlaybackState: PlayerWrapperPlaybackState,
     playerPlaybackControls: PlayerWrapperPlaybackControls,
+    videoConfiguration: VideoConfiguration,
+    physicalDevice: VisyncPhysicalDevice,
     isUserHost: Boolean,
     messageSender: PlayerMessageSender,
     showOverlay: () -> Unit,
@@ -96,54 +100,43 @@ fun VisyncPlayer(
     BackHandler {
         closePlayer()
     }
-    val device = when (isUserHost) {
-        true -> ZB631KL
-        false -> XiaomiRedmiNote11
-    }
-    val videoConfiguration = when (isUserHost) {
-        true -> VideoConfiguration(
-            mmVideoWidth = 192f,
-            mmVideoHeight = 108f,
-            mmDevicePositionX = 100f,
-            mmDevicePositionY = 10f,
-        )
-        false -> VideoConfiguration(
-            mmVideoWidth = 192f,
-            mmVideoHeight = 108f,
-            mmDevicePositionX = 15f,
-            mmDevicePositionY = 10f,
-        )
-    }
     val (videoWidth, videoHeight) = with(LocalDensity.current) {
         videoConfiguration.run {
-            device.run {
+            physicalDevice.run {
                 mmToDp(mmVideoWidth, density) to mmToDp(mmVideoHeight, density)
             }
         }
     }
     val (videoOffsetX, videoOffsetY) = with(LocalDensity.current) {
         videoConfiguration.run {
-            device.run {
-                -mmToDp(mmDevicePositionX, density) to mmToDp(mmDevicePositionY, density)
+            physicalDevice.run {
+                -mmToDp(mmDevicePositionX, density) to -mmToDp(mmDevicePositionY, density)
             }
         }
     }
 
     val (deviceWidth, deviceHeight) = with(LocalDensity.current) {
-        device.run {
+        physicalDevice.run {
             pxDisplayWidth.toDp() to pxDisplayHeight.toDp()
         }
     }
     if (selectedVideofile != null && selectedVideofile.uri != Uri.EMPTY) {
         Box(modifier = Modifier.fillMaxSize()) {
+            val offsetX = (videoWidth - deviceWidth) / 2 + videoOffsetX
+            val offsetY = videoOffsetY
+            Log.d("tag", "offsetX = $offsetX, offsetY = $offsetY")
+            Log.d("tag", "videoWidth = $videoWidth, videoHeight = $videoHeight")
             ExoPlayerComposable(
                 player = player,
                 modifier = Modifier
                     .absoluteOffset(
-                        x = (videoWidth - deviceWidth) / 2 + videoOffsetX,
-                        y = videoOffsetY
+                        x = offsetX,
+                        y = offsetY
                     )
-                    .requiredSize(width = videoWidth, height = videoHeight)
+                    .requiredSize(
+                        width = videoWidth,
+                        height = videoHeight
+                    )
             )
         }
     }
@@ -175,6 +168,7 @@ fun VisyncPlayer(
         )
     }
 }
+@Serializable
 data class VisyncPhysicalDevice(
     val mmDeviceWidth: Float,
     val mmDeviceHeight: Float,

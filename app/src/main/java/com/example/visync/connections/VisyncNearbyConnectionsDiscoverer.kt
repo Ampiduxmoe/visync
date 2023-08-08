@@ -23,7 +23,7 @@ interface VisyncDiscovererListener {
     fun onIsDiscoveringChanged(isDiscovering: Boolean)
     fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint)
     fun onNewConnectionRequest(request: ConnectionRequest)
-    fun onConnectionError(endpoint: String)
+    fun onConnectionError(endpointId: String)
     fun onNewRunningConnection(connection: RunningConnection)
     fun onRunningConnectionLost(connection: RunningConnection)
     fun onNewMessage(message: String, from: RunningConnection)

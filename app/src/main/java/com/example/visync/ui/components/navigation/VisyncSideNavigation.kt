@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateDp
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
@@ -33,10 +35,13 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -50,13 +55,16 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import com.example.visync.R
 import com.example.visync.data.user.generateNickname
+import com.example.visync.ui.screens.main.EditablePhysicalDevice
 import com.example.visync.ui.screens.main.EditableUsername
+import com.example.visync.ui.screens.player.VisyncPhysicalDevice
 
 @Composable
 fun ModalNavigationDrawerContent(
@@ -66,6 +74,7 @@ fun ModalNavigationDrawerContent(
     showMainDestinations: Boolean,
     closeDrawer: () -> Unit,
     editableUsername: EditableUsername,
+    editablePhysicalDevice: EditablePhysicalDevice,
 ) {
     ModalDrawerSheet {
         DrawerSheetContent(
@@ -76,6 +85,7 @@ fun ModalNavigationDrawerContent(
             closeDrawerButtonClick = closeDrawer,
             showMainDestinations = showMainDestinations,
             editableUsername = editableUsername,
+            editablePhysicalDevice = editablePhysicalDevice,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -89,6 +99,7 @@ fun PermanentNavigationDrawerContent(
     showCloseDrawerButton: Boolean,
     closeDrawerButtonClick: () -> Unit,
     editableUsername: EditableUsername,
+    editablePhysicalDevice: EditablePhysicalDevice,
     @SuppressLint("ModifierParameter")
     drawerSheetModifier: Modifier = Modifier,
     @SuppressLint("ModifierParameter")
@@ -105,6 +116,7 @@ fun PermanentNavigationDrawerContent(
             closeDrawerButtonClick = closeDrawerButtonClick,
             showMainDestinations = true,
             editableUsername = editableUsername,
+            editablePhysicalDevice = editablePhysicalDevice,
             modifier = drawerSheetContentModifier
         )
     }
@@ -119,6 +131,7 @@ private fun DrawerSheetContent(
     closeDrawerButtonClick: () -> Unit,
     showMainDestinations: Boolean,
     editableUsername: EditableUsername,
+    editablePhysicalDevice: EditablePhysicalDevice,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -177,6 +190,52 @@ private fun DrawerSheetContent(
                 textAlign = TextAlign.Center
             )
         }
+        val device = editablePhysicalDevice.value
+        val displayWidthPx = remember { mutableFloatStateOf(device.pxDisplayWidth) }
+        val displayHeightPx = remember { mutableFloatStateOf(device.pxDisplayHeight) }
+        val displayWidthMm = remember { mutableFloatStateOf(device.mmDisplayWidth) }
+        val displayHeightMm = remember { mutableFloatStateOf(device.mmDisplayHeight) }
+        val deviceWidthMm = remember { mutableFloatStateOf(device.mmDeviceWidth) }
+        val deviceHeightMm = remember { mutableFloatStateOf(device.mmDeviceHeight) }
+        val deviceDimensions = remember { mapOf(
+            "Display Width (Px)" to displayWidthPx,
+            "Display Height (Px)" to displayHeightPx,
+            "Display Width (Mm)" to displayWidthMm,
+            "Display Height (Mm)" to displayHeightMm,
+            "Device Width (Mm)" to deviceWidthMm,
+            "Device Height (Mm)" to deviceHeightMm,
+        )}
+        deviceDimensions.entries.forEach { entry ->
+            val label = entry.key
+            val field = entry.value
+            Row {
+                Text(label)
+                TextField(
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    value = field.value.toString(),
+                    onValueChange = { newText ->
+                        newText.toFloatOrNull()?.let { field.value = it }
+                    }
+                )
+            }
+        }
+        Text(
+            text = "save device changes",
+            modifier = Modifier.clickable {
+                editablePhysicalDevice.setValue(
+                    VisyncPhysicalDevice(
+                        mmDeviceWidth = deviceWidthMm.value,
+                        mmDeviceHeight = deviceHeightMm.value,
+                        mmDisplayWidth = displayWidthMm.value,
+                        mmDisplayHeight = displayHeightMm.value,
+                        pxDisplayWidth = displayWidthPx.value,
+                        pxDisplayHeight = displayHeightPx.value
+                    )
+                )
+                editablePhysicalDevice.applyChanges(context)
+            }
+        )
+
 
         ACCOUNT_RELATED_DESTINATIONS.forEach { accountDestination ->
             VisyncNavigationDrawerItem(
@@ -338,6 +397,7 @@ fun CollapsableNavigationDrawerContent(
     scrollState: ScrollState,
     drawerState: MutableState<CollapsableDrawerState>,
     editableUsername: EditableUsername,
+    editablePhysicalDevice: EditablePhysicalDevice,
     permanentDrawerWidth: Dp = 256.dp,
     railWidth: Dp = 80.dp,
 ) {
@@ -362,6 +422,7 @@ fun CollapsableNavigationDrawerContent(
                 CollapsableDrawerState.COLLAPSED
         },
         editableUsername = editableUsername,
+        editablePhysicalDevice = editablePhysicalDevice,
         drawerSheetContentModifier = Modifier
             .width(permanentDrawerWidth),
         drawerSheetModifier = drawerSheetModifier

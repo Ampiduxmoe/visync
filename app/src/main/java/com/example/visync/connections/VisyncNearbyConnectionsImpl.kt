@@ -26,14 +26,14 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
     private val connectionsClient: ConnectionsClient,
 ) : VisyncNearbyConnections {
 
-    private val cleanConnectionsState = VisyncNearbyConnectionsState(
+    private val defaultConnectionsState = VisyncNearbyConnectionsState(
         status = ConnectionStatus.IDLE,
         discoveredEndpoints = listOf(),
         connectionRequests = listOf(),
         runningConnections = listOf(),
     )
 
-    private val _connectionsState = MutableStateFlow(cleanConnectionsState)
+    private val _connectionsState = MutableStateFlow(defaultConnectionsState)
     override val connectionsState: StateFlow<VisyncNearbyConnectionsState> = _connectionsState
     override val advertiserState: StateFlow<VisyncAdvertiserState> = _connectionsState
     override val discovererState: StateFlow<VisyncDiscovererState> = _connectionsState
@@ -189,7 +189,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         stopAdvertising()
         stopDiscovering()
         connectionsClient.stopAllEndpoints()
-        _connectionsState.value = cleanConnectionsState
+        _connectionsState.value = defaultConnectionsState
     }
 
     private fun setStatus(status: ConnectionStatus) {

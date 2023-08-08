@@ -1,7 +1,9 @@
 package com.example.visync.messaging
 
+import com.example.visync.ui.screens.main.playback_setup.FinalDevicePositionConfiguration
 import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupOptions
 import com.example.visync.ui.screens.main.playback_setup.Watcher
+import com.example.visync.ui.screens.player.VisyncPhysicalDevice
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -25,14 +27,16 @@ class JsonVisyncMessageConverter {
             RequestSelfInfoMessage::class.simpleName            -> decodeAs<RequestSelfInfoMessage>(msg)
             SelfInfoMessage::class.simpleName                   -> decodeAs<SelfInfoMessage>(msg)
             AllWatchersUpdateMessage::class.simpleName          -> decodeAs<AllWatchersUpdateMessage>(msg)
-            VersionMessage::class.simpleName                    -> decodeAs<VersionMessage>(msg)
-            RequestVersionMessage::class.simpleName             -> decodeAs<RequestVersionMessage>(msg)
+            GuestWatcherInfoMessage::class.simpleName           -> decodeAs<GuestWatcherInfoMessage>(msg)
+            RequestGuestWatcherInfoMessage::class.simpleName             -> decodeAs<RequestGuestWatcherInfoMessage>(msg)
             PlaybackSetupOptionsUpdateMessage::class.simpleName -> decodeAs<PlaybackSetupOptionsUpdateMessage>(msg)
             DoNotHaveVideofilesMessage::class.simpleName        -> decodeAs<DoNotHaveVideofilesMessage>(msg)
             OpenPlayerMessage::class.simpleName                 -> decodeAs<OpenPlayerMessage>(msg)
             PlaybackPauseUnpauseMessage::class.simpleName       -> decodeAs<PlaybackPauseUnpauseMessage>(msg)
             PlaybackSeekToMessage::class.simpleName             -> decodeAs<PlaybackSeekToMessage>(msg)
             PlaybackSeekToPrevNextMessage::class.simpleName     -> decodeAs<PlaybackSeekToPrevNextMessage>(msg)
+            VisyncPhysicalDeviceMessage::class.simpleName       -> decodeAs<VisyncPhysicalDeviceMessage>(msg)
+            DevicePositionConfigMessage::class.simpleName       -> decodeAs<DevicePositionConfigMessage>(msg)
             else -> {
                 throw IllegalArgumentException("Could not match message to any message type")
             }
@@ -74,17 +78,18 @@ class AllWatchersUpdateMessage(
 )
 
 @Serializable
-class VersionMessage(
-    val version: Int
+class GuestWatcherInfoMessage(
+    val physicalDevice: VisyncPhysicalDevice,
+    val messagingVersion: Int
 ) : VisyncMessage(
-    type = VersionMessage::class.simpleName!!
+    type = GuestWatcherInfoMessage::class.simpleName!!
 )
 
 @Serializable
-class RequestVersionMessage(
+class RequestGuestWatcherInfoMessage(
 
 ) : VisyncMessage(
-    type = RequestVersionMessage::class.simpleName!!
+    type = RequestGuestWatcherInfoMessage::class.simpleName!!
 )
 
 @Serializable
@@ -128,4 +133,18 @@ class PlaybackSeekToPrevNextMessage(
     val toPrev: Boolean
 ) : VisyncMessage(
     type = PlaybackSeekToPrevNextMessage::class.simpleName!!
+)
+
+@Serializable
+class VisyncPhysicalDeviceMessage(
+    val device: VisyncPhysicalDevice
+) : VisyncMessage(
+    type = VisyncPhysicalDeviceMessage::class.simpleName!!
+)
+
+@Serializable
+class DevicePositionConfigMessage(
+    val config: FinalDevicePositionConfiguration
+) : VisyncMessage(
+    type = DevicePositionConfigMessage::class.simpleName!!
 )

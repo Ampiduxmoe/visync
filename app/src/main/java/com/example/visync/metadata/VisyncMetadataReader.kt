@@ -1,6 +1,9 @@
 package com.example.visync.metadata
 
 import android.content.Context
+import android.media.MediaMetadataRetriever
+import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
@@ -19,6 +22,11 @@ class VisyncMetadataReader(
         }
         val displayNameCol = MediaStore.Video.VideoColumns.DISPLAY_NAME
         val durationCol = MediaStore.Video.VideoColumns.DURATION
+
+        val mediaMetadataRetriever = MediaMetadataRetriever()
+        mediaMetadataRetriever.setDataSource(context, contentUri)
+        val width = mediaMetadataRetriever.extractMetadata(METADATA_KEY_VIDEO_WIDTH)!!.toFloat()
+        val height = mediaMetadataRetriever.extractMetadata(METADATA_KEY_VIDEO_HEIGHT)!!.toFloat()
         return context.contentResolver
             .query(
                 /* uri = */ contentUri,
@@ -37,7 +45,9 @@ class VisyncMetadataReader(
 
                 VideoMetadata(
                     filename = displayName ?: contentUri.lastPathSegment ?: return null,
-                    duration = duration
+                    duration = duration,
+                    width = width,
+                    height = height
                 )
             }
     }

@@ -29,6 +29,7 @@ import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
 import com.example.visync.ui.screens.main.MainAppViewModel
 import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupViewModel
+import com.example.visync.ui.screens.player.VideoConfiguration
 import com.example.visync.ui.screens.player.VisyncPlayer
 import com.example.visync.ui.screens.player.VisyncPlayerViewModel
 
@@ -48,7 +49,12 @@ fun AppWrapper(
         .uiState.collectAsStateWithLifecycle()
     val sideNavigationUiState by mainAppViewModel
         .mainAppNavigationUiState.collectAsStateWithLifecycle()
-    if (sideNavigationUiState.editableUsername.value == mainAppViewModel.usernamePlaceholder) {
+    val navStateUsername = sideNavigationUiState.editableUsername.value
+    val navStatePhysicalDevice = sideNavigationUiState.editablePhysicalDevice.value
+    val navStateHasPlaceholders =
+            navStateUsername == mainAppViewModel.usernamePlaceholder ||
+            navStatePhysicalDevice == mainAppViewModel.physicalDevicePlaceholder
+    if (navStateHasPlaceholders) {
         mainAppViewModel.initializeNavigationUiState(context)
     }
 
@@ -104,7 +110,9 @@ fun AppWrapper(
                 playerUiState = visyncPlayerUiState,
                 playerPlaybackState = visyncPLayerPlaybackState,
                 playerPlaybackControls = visyncPlayerViewModel.playerWrapper.playbackControls,
+                videoConfiguration = finalPlaybackSetupOutput.value!!.videoConfiguration,
                 isUserHost = finalPlaybackSetupOutput.value!!.isUserHost,
+                physicalDevice = sideNavigationUiState.editablePhysicalDevice.value,
                 showOverlay = visyncPlayerViewModel::showOverlay,
                 hideOverlay = visyncPlayerViewModel::hideOverlay,
                 closePlayer = {
@@ -184,6 +192,7 @@ fun getPlayerMessageSender(
 }
 
 class PlaybackSetupOutput(
+    val videoConfiguration: VideoConfiguration,
     val isUserHost: Boolean,
     val resetAllConnections: () -> Unit,
     val messageSender: PlayerMessageSender,

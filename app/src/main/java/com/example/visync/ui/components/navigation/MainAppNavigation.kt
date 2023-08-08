@@ -64,7 +64,8 @@ fun MainAppNavigation(
                         closeDrawer = {
                             mainAppNavigationScope.closeDrawer()
                         },
-                        editableUsername = uiState.editableUsername
+                        editableUsername = uiState.editableUsername,
+                        editablePhysicalDevice = uiState.editablePhysicalDevice
                     )
                 },
                 drawerState = drawerState
@@ -100,7 +101,8 @@ fun MainAppNavigation(
                         closeDrawer = {
                             mainAppNavigationScope.closeDrawer()
                         },
-                        editableUsername = uiState.editableUsername
+                        editableUsername = uiState.editableUsername,
+                        editablePhysicalDevice = uiState.editablePhysicalDevice
                     )
                 },
                 drawerState = drawerState
@@ -140,7 +142,8 @@ fun MainAppNavigation(
                         },
                         scrollState = rememberScrollState(),
                         drawerState = collapsableDrawerState,
-                        editableUsername = uiState.editableUsername
+                        editableUsername = uiState.editableUsername,
+                        editablePhysicalDevice = uiState.editablePhysicalDevice
                     )
                 }
             ) {

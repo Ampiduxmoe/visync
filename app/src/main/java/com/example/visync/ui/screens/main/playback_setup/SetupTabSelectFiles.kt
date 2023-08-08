@@ -100,7 +100,9 @@ fun SetupTabSelectFiles(
                     metadata = VideoMetadata(
                         filename = metadata.filename,
                         altFilename = altFilename,
-                        duration = metadata.duration
+                        duration = metadata.duration,
+                        width = metadata.width,
+                        height = metadata.height
                     )
                 )
             ))
@@ -156,7 +158,7 @@ private fun HostSelectionColumn(
             horizontalArrangement = Arrangement.SpaceBetween,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Host-selected files")
+            Text("Host files")
             if (isUserHost && hasSelectedVideofiles) {
                 Row {
                     AddVideofilesSmallButton(onClick = addVideofiles)
@@ -278,7 +280,7 @@ private fun AddVideofilesSmallButton(
     onClick: () -> Unit,
 ) {
     Text(
-        text = "add files",
+        text = "add",
         modifier = Modifier.clickable {
             onClick()
         }
@@ -290,7 +292,7 @@ private fun SelectVideofilesSmallButton(
     onClick: () -> Unit,
 ) {
     Text(
-        text = "reselect",
+        text = "re",
         modifier = Modifier.clickable {
             onClick()
         }
@@ -349,7 +351,9 @@ fun urisToVideofiles(
         metadata = metadataReader.getVideoMetadataFromUri(it)
             ?: VideoMetadata(
                 filename = "unknown file",
-                duration = -1
+                duration = -1,
+                width = -1f,
+                height = -1f
             )
     )
 }

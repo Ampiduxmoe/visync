@@ -10,16 +10,19 @@ import com.example.visync.connections.VisyncNearbyConnectionsListener
 import com.example.visync.data.videofiles.Videofile
 import com.example.visync.messaging.JsonVisyncMessageConverter
 import com.example.visync.messaging.OpenPlayerMessage
-import com.example.visync.messaging.RequestVersionMessage
+import com.example.visync.messaging.RequestGuestWatcherInfoMessage
 import com.example.visync.messaging.AllWatchersUpdateMessage
+import com.example.visync.messaging.DevicePositionConfigMessage
 import com.example.visync.messaging.DoNotHaveVideofilesMessage
 import com.example.visync.messaging.PlaybackPauseUnpauseMessage
 import com.example.visync.messaging.PlaybackSetupOptionsUpdateMessage
 import com.example.visync.messaging.RequestSelfInfoMessage
 import com.example.visync.messaging.SelfInfoMessage
-import com.example.visync.messaging.VersionMessage
+import com.example.visync.messaging.GuestWatcherInfoMessage
 import com.example.visync.messaging.VisyncMessage
 import com.example.visync.metadata.VideoMetadata
+import com.example.visync.ui.screens.player.VideoConfiguration
+import com.example.visync.ui.screens.player.VisyncPhysicalDevice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +38,7 @@ class PlaybackSetupViewModel @Inject constructor(
     val connectionsAdvertiser = visyncNearbyConnections.asAdvertiser()
     val connectionsDiscoverer = visyncNearbyConnections.asDiscoverer()
 
-    val _allRunningConnections
+    private val _allRunningConnections
         get() = visyncNearbyConnections.connectionsState.value.runningConnections
 
     private val messagingVersion = 1
@@ -45,7 +48,15 @@ class PlaybackSetupViewModel @Inject constructor(
         username = "",
         messagingVersion = messagingVersion,
         isApproved = false,
-        missingVideofileNames = emptyList()
+        missingVideofileNames = emptyList(),
+        physicalDevice = VisyncPhysicalDevice(
+            mmDeviceWidth = 0f,
+            mmDeviceHeight = 0f,
+            mmDisplayWidth = 0f,
+            mmDisplayHeight = 0f,
+            pxDisplayWidth = 0f,
+            pxDisplayHeight = 0f,
+        )
     )
     private val playbackSetupStateDefault = PlaybackSetupState(
         setupMode = setupModeDefault,
@@ -95,13 +106,16 @@ class PlaybackSetupViewModel @Inject constructor(
     var messageEvents = getEmptyMessageEvents()
         private set
 
+    var finalDevicePositionConfiguration: FinalDevicePositionConfiguration? = null
+        private set
+
     init {
         visyncNearbyConnections.setEventListener(object : VisyncNearbyConnectionsListener() {
             override fun onNewConnectionRequest(request: ConnectionRequest) {
                 request.accept()
             }
 
-            override fun onConnectionError(endpoint: String) {
+            override fun onConnectionError(endpointId: String) {
                 if (_setupMode == SetupMode.GUEST) {
                     _connectionError = true
                 }
@@ -127,25 +141,46 @@ class PlaybackSetupViewModel @Inject constructor(
                 playbackSetupMessenger.process(message, from)
             }
         })
-        observeAdvertiserState()
     }
 
-    private fun observeAdvertiserState() {
-//        viewModelScope.launch {
-//            connectionsAdvertiser.advertiserState.collect { advertiserState ->
-//
-//            }
-//        }
+    fun initializePhysicalDevice(device: VisyncPhysicalDevice) {
+        _meAsWatcher = _meAsWatcher.copy(
+            physicalDevice = device
+        )
+        Log.d("tag", "initing device with ${_meAsWatcher.physicalDevice}")
     }
 
-    fun resetToDefaultState() {
-        _playbackSetupState.update { playbackSetupStateDefault }
+    fun setFinalDevicePositionConfiguration(config: FinalDevicePositionConfiguration) {
+        finalDevicePositionConfiguration = config
+        if (_setupMode == SetupMode.HOST) {
+            playbackSetupMessenger.sendDevicePositionConfigMessage()
+        }
+    }
+
+    fun devicePositionConfigurationToVideoConfiguration(
+        targetEndpointId: String,
+        config: FinalDevicePositionConfiguration
+    ): VideoConfiguration {
+        val video = config.videoOnCanvas
+        val devices = config.devicesOnCanvas
+        val targetDeviceInfo = devices.find { it.watcherTag.endpointId == targetEndpointId }
+        targetDeviceInfo ?: throw IllegalArgumentException("EndpointId was not found in the config")
+        val deviceOnCanvas = targetDeviceInfo.deviceOnCanvas
+        return VideoConfiguration(
+            mmVideoWidth = video.mmWidth,
+            mmVideoHeight = video.mmHeight,
+            mmDevicePositionX = deviceOnCanvas.mmOffsetX - video.mmOffsetX,
+            mmDevicePositionY = deviceOnCanvas.mmOffsetY - video.mmOffsetY
+        )
     }
 
     fun fullResetToHostMode() {
         visyncNearbyConnections.reset()
         _playbackSetupState.value = playbackSetupStateDefault.copy(
-            setupMode = SetupMode.HOST
+            setupMode = SetupMode.HOST,
+            meAsWatcher = playbackSetupStateDefault.meAsWatcher.copy(
+                physicalDevice = _meAsWatcher.physicalDevice // TODO: properly handle this
+            )
         )
     }
 
@@ -154,7 +189,10 @@ class PlaybackSetupViewModel @Inject constructor(
         _playbackSetupState.value = playbackSetupStateDefault.copy(
             setupMode = SetupMode.GUEST,
             isConnectingToHost = true,
-            connectionError = false
+            connectionError = false,
+            meAsWatcher = playbackSetupStateDefault.meAsWatcher.copy(
+                physicalDevice = _meAsWatcher.physicalDevice // TODO: properly handle this
+            )
         )
     }
 
@@ -302,13 +340,14 @@ class PlaybackSetupViewModel @Inject constructor(
                 is SelfInfoMessage -> {
                     _hostAsWatcher = _meAsWatcher
                 }
-                is VersionMessage -> {
+                is GuestWatcherInfoMessage -> {
                     addWatcher(Watcher(
                         endpointId = sender.endpointId,
                         username = sender.username,
-                        messagingVersion = fullMessage.version,
+                        messagingVersion = fullMessage.messagingVersion,
                         isApproved = false,
-                        missingVideofileNames = listOf()
+                        missingVideofileNames = listOf(),
+                        physicalDevice = fullMessage.physicalDevice
                     ))
                 }
                 is DoNotHaveVideofilesMessage -> {
@@ -328,8 +367,8 @@ class PlaybackSetupViewModel @Inject constructor(
 
         private fun processAsGuest(fullMessage: VisyncMessage, sender: RunningConnection) {
             when (fullMessage) {
-                is RequestVersionMessage -> {
-                    sendMessagingVersion(to = sender)
+                is RequestGuestWatcherInfoMessage -> {
+                    sendGuestWatcherInfo(to = sender)
                 }
                 is PlaybackSetupOptionsUpdateMessage -> {
                     val prevFilesMetadata = _playbackSetupOptions.videofilesMetadata
@@ -361,6 +400,9 @@ class PlaybackSetupViewModel @Inject constructor(
                         otherWatchers = others
                     ) }
                 }
+                is DevicePositionConfigMessage -> {
+                    setFinalDevicePositionConfiguration(fullMessage.config)
+                }
                 is OpenPlayerMessage -> {
                     messageEvents.onOpenPlayerMessage?.invoke()
                 }
@@ -385,15 +427,19 @@ class PlaybackSetupViewModel @Inject constructor(
             to.sendMessage(msg)
         }
 
-        private fun sendMessagingVersion(to: RunningConnection) {
-            val versionMessage = VersionMessage(messagingVersion)
-            val msg = messageConverter.encode(versionMessage)
+        private fun sendGuestWatcherInfo(to: RunningConnection) {
+            Log.d("tag", "before sending ${_meAsWatcher.physicalDevice}")
+            val guestWatcherInfoMessage = GuestWatcherInfoMessage(
+                physicalDevice = _meAsWatcher.physicalDevice,
+                messagingVersion = messagingVersion
+            )
+            val msg = messageConverter.encode(guestWatcherInfoMessage)
             to.sendMessage(msg)
         }
 
         fun sendRequestMessagingVersion(to: RunningConnection) {
-            val requestVersionMessage = RequestVersionMessage()
-            val msg = messageConverter.encode(requestVersionMessage)
+            val requestGuestWatcherInfoMessage = RequestGuestWatcherInfoMessage()
+            val msg = messageConverter.encode(requestGuestWatcherInfoMessage)
             to.sendMessage(msg)
         }
 
@@ -435,6 +481,17 @@ class PlaybackSetupViewModel @Inject constructor(
             to.sendMessage(msg)
         }
 
+        fun sendDevicePositionConfigMessage() {
+            val approvedWatcherIds = _otherWatchers
+                .filter { it.isApproved }
+                .map { it.endpointId }
+            val receivers = _allRunningConnections
+                .filter { it.endpointId in approvedWatcherIds }
+            val devicePositionConfigMessage = DevicePositionConfigMessage(finalDevicePositionConfiguration!!)
+            val msg = messageConverter.encode(devicePositionConfigMessage)
+            connectionsAdvertiser.sendMessageToMultiple(msg, receivers)
+        }
+
         fun sendOpenPlayer() {
             val approvedWatcherIds = _otherWatchers
                 .filter { it.isApproved }
@@ -472,6 +529,7 @@ data class Watcher(
     val messagingVersion: Int,
     val isApproved: Boolean,
     val missingVideofileNames: List<String>,
+    val physicalDevice: VisyncPhysicalDevice,
 )
 
 @Serializable

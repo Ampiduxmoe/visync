@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 data class VideoMetadata(
     val filename: String,
     val duration: Long,
+    val width: Float,
+    val height: Float,
 ) {
     var altFilename: String = filename
         private set
@@ -13,7 +15,9 @@ data class VideoMetadata(
         filename: String,
         altFilename: String,
         duration: Long,
-    ): this(filename, duration) {
+        width: Float,
+        height: Float,
+    ): this(filename, duration, width, height) {
         this.altFilename = altFilename
     }
 }

@@ -118,6 +118,9 @@ fun MainApp(
     val playbackSetupConnections = playbackSetupViewModel.visyncNearbyConnections
     val connectionsState by playbackSetupConnections
         .connectionsState.collectAsStateWithLifecycle()
+    playbackSetupViewModel.initializePhysicalDevice(
+        mainAppNavigationUiState.editablePhysicalDevice.value
+    )
 
     val navController = rememberNavController()
     val navActions = VisyncNavigationActions(navController)
@@ -200,6 +203,7 @@ fun MainApp(
                     startAdvertising =  {
                         playbackSetupConnections.startAdvertising(username, context)
                     },
+                    setFinalDevicePositionConfiguration = playbackSetupViewModel::setFinalDevicePositionConfiguration,
                     play = {
                         val playbackSetupOptions = playbackSetupState.playbackSetupOptions
                         playbackSetupViewModel.sendOpenPlayer()
@@ -210,6 +214,10 @@ fun MainApp(
                                 playbackSpeed = playbackSetupOptions.playbackSpeed
                             ),
                             PlaybackSetupOutput(
+                                videoConfiguration = playbackSetupViewModel.devicePositionConfigurationToVideoConfiguration(
+                                    targetEndpointId = playbackSetupState.meAsWatcher.endpointId,
+                                    config = playbackSetupViewModel.finalDevicePositionConfiguration!!
+                                ),
                                 isUserHost = true,
                                 resetAllConnections = playbackSetupConnections::reset,
                                 messageSender = messageSender
@@ -241,6 +249,10 @@ fun MainApp(
                                     playbackSpeed = playbackSetupOptions.playbackSpeed
                                 ),
                                 PlaybackSetupOutput(
+                                    videoConfiguration = playbackSetupViewModel.devicePositionConfigurationToVideoConfiguration(
+                                        targetEndpointId = playbackSetupState.meAsWatcher.endpointId,
+                                        config = playbackSetupViewModel.finalDevicePositionConfiguration!!
+                                    ),
                                     isUserHost = false,
                                     resetAllConnections = playbackSetupConnections::reset,
                                     messageSender = messageSender
@@ -272,7 +284,8 @@ fun MainApp(
                 if (isInGuestMode && isConnected) {
                     PlaybackSetupScreen(
                         playbackSetupState = playbackSetupState,
-                        setSelectedVideofilesAsGuest = playbackSetupViewModel::setVideofilesAsGuest
+                        setSelectedVideofilesAsGuest = playbackSetupViewModel::setVideofilesAsGuest,
+                        setFinalDevicePositionConfiguration = playbackSetupViewModel::setFinalDevicePositionConfiguration,
                     )
                 } else {
                     DisposableEffect(Unit) {

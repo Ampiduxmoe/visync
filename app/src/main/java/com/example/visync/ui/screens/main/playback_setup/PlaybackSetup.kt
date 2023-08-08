@@ -24,12 +24,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.visync.R
 import com.example.visync.data.videofiles.Videofile
+import com.example.visync.metadata.VideoMetadata
 
 /** PlaybackSetupScreen overload for guest mode */
 @Composable
 fun PlaybackSetupScreen(
     playbackSetupState: PlaybackSetupState,
     setSelectedVideofilesAsGuest: (List<Videofile>) -> Unit,
+    setFinalDevicePositionConfiguration: (FinalDevicePositionConfiguration) -> Unit,
 ) = PlaybackSetupScreen(
     isHostScreen = false,
     playbackSetupState = playbackSetupState,
@@ -40,6 +42,7 @@ fun PlaybackSetupScreen(
     approveWatcher =  {},
     disapproveWatcher =  {},
     startAdvertising = {},
+    setFinalDevicePositionConfiguration = setFinalDevicePositionConfiguration,
     play = {},
 )
 
@@ -51,6 +54,7 @@ fun PlaybackSetupScreen(
     approveWatcher: (Watcher) -> Unit,
     disapproveWatcher: (Watcher) -> Unit,
     startAdvertising: () -> Unit,
+    setFinalDevicePositionConfiguration: (FinalDevicePositionConfiguration) -> Unit,
     play: () -> Unit,
 ) = PlaybackSetupScreen(
     isHostScreen = true,
@@ -59,6 +63,7 @@ fun PlaybackSetupScreen(
     approveWatcher = approveWatcher,
     disapproveWatcher = disapproveWatcher,
     startAdvertising = startAdvertising,
+    setFinalDevicePositionConfiguration = setFinalDevicePositionConfiguration,
     play = play
 )
 
@@ -70,6 +75,7 @@ private fun PlaybackSetupScreen(
     approveWatcher: (Watcher) -> Unit,
     disapproveWatcher: (Watcher) -> Unit,
     startAdvertising: () -> Unit,
+    setFinalDevicePositionConfiguration: (FinalDevicePositionConfiguration) -> Unit,
     play: () -> Unit,
 ) {
     val playbackSetupOptions = playbackSetupState.playbackSetupOptions
@@ -173,15 +179,6 @@ private fun PlaybackSetupScreen(
                 exit = exitTransition()
             ) {
                 Column {
-                    SetupTabPeople(
-                        hostAsWatcher = hostAsWatcher,
-                        meAsWatcher = meAsWatcher,
-                        notApprovedWatchers = notApprovedWatchers,
-                        approvedWatchers = approvedWatchers,
-                        notApprovedWatcherModifier = notApprovedWatcherModifier,
-                        approvedWatcherModifier = approvedWatcherModifier,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                     if (isUserHost) {
                         Spacer(modifier = Modifier.height(40.dp))
                         Text(
@@ -193,6 +190,18 @@ private fun PlaybackSetupScreen(
                             modifier = Modifier.clickable { play() }
                         )
                     }
+                    SetupTabPeople(
+                        isUserHost = isUserHost,
+                        hostAsWatcher = hostAsWatcher,
+                        meAsWatcher = meAsWatcher,
+                        notApprovedWatchers = notApprovedWatchers,
+                        approvedWatchers = approvedWatchers,
+                        videoMetadata = playbackSetupState.selectedVideofiles.firstOrNull()?.metadata ?: VideoMetadata("", 0L, 0f, 0f),
+                        setFinalDevicePositionConfiguration = setFinalDevicePositionConfiguration,
+                        notApprovedWatcherModifier = notApprovedWatcherModifier,
+                        approvedWatcherModifier = approvedWatcherModifier,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
