@@ -1,6 +1,6 @@
 package com.example.visync.connections
 
-import android.content.Context
+import android.app.Application
 import android.util.Log
 import com.example.visync.R
 import com.google.android.gms.nearby.connection.AdvertisingOptions
@@ -17,407 +17,313 @@ import com.google.android.gms.nearby.connection.PayloadCallback
 import com.google.android.gms.nearby.connection.PayloadTransferUpdate
 import com.google.android.gms.nearby.connection.Strategy
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
-private val maxLogMsgLength = 40
-
 class VisyncNearbyConnectionsImpl @Inject constructor(
-    private val connectionsClient: ConnectionsClient,
+    private val _connectionsClient: ConnectionsClient,
+    private val _application: Application
 ) : VisyncNearbyConnections {
 
     private val defaultConnectionsState = VisyncNearbyConnectionsState(
-        status = ConnectionStatus.IDLE,
+        broadcastingState = BroadcastingState.IDLE,
         discoveredEndpoints = listOf(),
         connectionRequests = listOf(),
         runningConnections = listOf(),
     )
 
     private val _connectionsState = MutableStateFlow(defaultConnectionsState)
-    override val connectionsState: StateFlow<VisyncNearbyConnectionsState> = _connectionsState
-    override val advertiserState: StateFlow<VisyncAdvertiserState> = _connectionsState
-    override val discovererState: StateFlow<VisyncDiscovererState> = _connectionsState
+    override val connectionsState = _connectionsState.asStateFlow()
 
-    override var eventListener: VisyncNearbyConnectionsListener = VisyncNearbyConnectionsListener()
-        private set
-    override var advertiserEventListener: VisyncAdvertiserListener = eventListener
-        private set
-    override var discovererEventListener: VisyncDiscovererListener = eventListener
-        private set
+    private var _broadcastingState
+        get() = _connectionsState.value.broadcastingState
+        set(value) = _connectionsState.update { it.copy(broadcastingState = value) }
+    private var _discoveredEndpoints
+        get() = _connectionsState.value.discoveredEndpoints
+        set(value) = _connectionsState.update { it.copy(discoveredEndpoints = value) }
+    private var _connectionRequests
+        get() = _connectionsState.value.connectionRequests
+        set(value) = _connectionsState.update { it.copy(connectionRequests = value) }
+    private var _runningConnections
+        get() = _connectionsState.value.runningConnections
+        set(value) = _connectionsState.update { it.copy(runningConnections = value) }
 
-    private var username = ""
-    private val endpointUsernames = mutableMapOf<String, String>()
+    val emptyEventListener = EmptyVisyncNearbyConnectionsListener()
+    override var eventListener: VisyncNearbyConnectionsListener = emptyEventListener
 
     private var _stopAdvertising: (() -> Unit)? = null
     private var _stopDiscovering: (() -> Unit)? = null
 
-    override fun startAdvertising(username: String, context: Context) {
-        if (_stopAdvertising != null || _stopDiscovering != null) {
+    private var _config: VisyncNearbyConnectionsConfiguration? = null
+
+    override fun initialize(config: VisyncNearbyConnectionsConfiguration) {
+        _config = config
+    }
+
+    override fun startAdvertising(
+        config: VisyncNearbyConnectionsConfiguration?,
+        onTaskFailure: (Exception) -> Unit,
+        onTaskSuccess: () -> Unit,
+    ) {
+        config?.let { _config = config }
+        if (_broadcastingState != BroadcastingState.IDLE) {
             return
         }
-        this.username = username
+        val currentConfig = _config ?: throw Exception("No configuration found")
         val advertisingOptions = AdvertisingOptions.Builder()
             .setStrategy(Strategy.P2P_STAR)
             .build()
-        connectionsClient
+        _connectionsClient
             .startAdvertising(
-                this.username,
-                context.getString(R.string.app_name),
+                currentConfig.username,
+                _application.getString(R.string.app_name),
                 connectionLifecycleCallback,
                 advertisingOptions
             )
             .addOnSuccessListener {
-                Log.d(
-                    "NearbyConnectionsWrapper",
-                    "Started advertising"
-                )
-                setStatus(ConnectionStatus.ADVERTISING)
+                logD("Started advertising")
+                _broadcastingState = BroadcastingState.ADVERTISING
+                _stopAdvertising = {
+                    _connectionsClient.stopAdvertising()
+                    _broadcastingState = BroadcastingState.IDLE
+                    _stopAdvertising = null
+                    logD("Stopped advertising")
+                }
+                onTaskSuccess()
             }
             .addOnFailureListener { exception ->
-                Log.e(
-                    "NearbyConnectionsWrapper",
-                    "Failed to start advertising",
-                    exception
-                )
+                logE("Failed to start advertising", exception)
+                onTaskFailure(exception)
             }
-        _stopAdvertising = {
-            connectionsClient.stopAdvertising()
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "Stopped discovering"
-            )
-            _stopAdvertising = null
-            setStatus(ConnectionStatus.IDLE)
-        }
     }
 
     override fun stopAdvertising() {
         _stopAdvertising?.invoke()
     }
 
-    override fun startDiscovering(username: String, context: Context) {
-        if (_stopAdvertising != null || _stopDiscovering != null) {
+    override fun startDiscovering(
+        config: VisyncNearbyConnectionsConfiguration?,
+        onTaskFailure: (Exception) -> Unit,
+        onTaskSuccess: () -> Unit,
+    ) {
+        config?.let { _config = config }
+        if (_broadcastingState != BroadcastingState.IDLE) {
             return
         }
-        this.username = username
         val discoveryOptions = DiscoveryOptions.Builder()
             .setStrategy(Strategy.P2P_STAR)
             .build()
-        connectionsClient
+        _connectionsClient
             .startDiscovery(
-                context.getString(R.string.app_name),
+                _application.getString(R.string.app_name),
                 endpointDiscoveryCallback,
                 discoveryOptions
             )
             .addOnSuccessListener {
-                Log.d(
-                    "NearbyConnectionsWrapper",
-                    "Started discovering"
-                )
-                setStatus(ConnectionStatus.DISCOVERING)
+                logD("Started discovering")
+                _broadcastingState = BroadcastingState.DISCOVERING
+                _stopDiscovering = {
+                    _connectionsClient.stopDiscovery()
+                    _broadcastingState = BroadcastingState.IDLE
+                    _stopDiscovering = null
+                    logD("Stopped discovering")
+                }
             }
             .addOnFailureListener { exception ->
-                Log.e(
-                    "NearbyConnectionsWrapper",
-                    "Failed to start discovering",
-                    exception
-                )
+                logE("Failed to start discovering", exception)
             }
-        _stopDiscovering = {
-            connectionsClient.stopDiscovery()
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "Stopped discovering"
-            )
-            _stopDiscovering = null
-            setStatus(ConnectionStatus.IDLE)
-        }
     }
 
     override fun stopDiscovering() {
         _stopDiscovering?.invoke()
     }
 
-    private fun sendMessage(msg: String, receiver: RunningConnection) {
+    private fun sendMessage(
+        msg: String,
+        receiver: RunningConnection,
+        onTaskFailure: (Exception) -> Unit,
+        onTaskSuccess: () -> Unit,
+    ) {
         val payload = Payload.fromBytes(msg.toByteArray(Charsets.UTF_8))
-        connectionsClient
+        _connectionsClient
             .sendPayload(receiver.endpointId, payload)
             .addOnSuccessListener {
-                val trimmedMsg = msg.substring(0, maxLogMsgLength.coerceAtMost(msg.length))
-                val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
-                Log.d(
-                    "NearbyConnectionsWrapper",
-                    "Successfully sent a message [$trimmedMsg$maybeThreeDots] " +
-                            "to ${receiver.endpointId} (${receiver.username})"
-                )
+                val receiverTag = "${receiver.endpointId} (${receiver.username})"
+                logD("Successfully sent a message ($msg) to $receiverTag")
+                onTaskSuccess()
             }
             .addOnFailureListener { exception ->
-                Log.e(
-                    "NearbyConnectionsWrapper",
-                    "Could not send a message",
-                    exception
-                )
+                logE("Could not send a message", exception)
+                onTaskFailure(exception)
             }
     }
 
-    override fun sendMessageToMultiple(msg: String, receivers: List<RunningConnection>) {
-        if (receivers.isEmpty()) {
-            return
-        }
-        val receiverIds = receivers.map { it.endpointId }
+    override fun sendMessageToMultiple(
+        msg: String,
+        endpointIds: List<String>,
+        onTaskFailure: (Exception) -> Unit,
+        onTaskSuccess: () -> Unit,
+    ) {
+        endpointIds.ifEmpty { return }
         val payload = Payload.fromBytes(msg.toByteArray(Charsets.UTF_8))
-        connectionsClient
-            .sendPayload(receiverIds, payload)
+        _connectionsClient
+            .sendPayload(endpointIds, payload)
             .addOnSuccessListener {
-                val trimmedMsg = msg.substring(0, maxLogMsgLength.coerceAtMost(msg.length))
-                val maybeThreeDots = if (msg.length > trimmedMsg.length) "..." else ""
-                Log.d(
-                    "NearbyConnectionsWrapper",
-                    "Successfully sent a multicast message [$trimmedMsg$maybeThreeDots]"
-                )
+                logD("Successfully sent a multicast message ($msg) to $endpointIds")
+                onTaskSuccess()
             }
             .addOnFailureListener { exception ->
-                Log.e(
-                    "NearbyConnectionsWrapper",
-                    "Could not send a message",
-                    exception
-                )
+                logE("Could not send a message", exception)
+                onTaskFailure(exception)
             }
     }
 
-    override fun reset() {
+    override fun resetToIdle() {
         stopAdvertising()
         stopDiscovering()
-        connectionsClient.stopAllEndpoints()
+        _connectionsClient.stopAllEndpoints()
         _connectionsState.value = defaultConnectionsState
-    }
-
-    private fun setStatus(status: ConnectionStatus) {
-        val oldStatus = _connectionsState.value.status
-        if (oldStatus == status) {
-            return
-        }
-        _connectionsState.value = _connectionsState.value.copy(
-            status = status
-        )
-        eventListener.onStatusChanged(status)
-        if (oldStatus == ConnectionStatus.ADVERTISING || status == ConnectionStatus.ADVERTISING) {
-            advertiserEventListener.onIsAdvertisingChanged(
-                isAdvertising = status == ConnectionStatus.ADVERTISING
-            )
-        }
-        if (oldStatus == ConnectionStatus.DISCOVERING || status == ConnectionStatus.DISCOVERING) {
-            discovererEventListener.onIsDiscoveringChanged(
-                isDiscovering = status == ConnectionStatus.DISCOVERING
-            )
-        }
     }
 
     private fun addDiscoveredEndpoint(
         endpointId: String,
         endpointInfo: DiscoveredEndpointInfo,
     ) {
-        val discoveredUsername = endpointInfo.endpointName
-        endpointUsernames += endpointId to discoveredUsername
         val discoveredEndpoint = DiscoveredEndpointImpl(
             endpointId = endpointId,
             endpointInfo = endpointInfo,
         )
-        _connectionsState.value = _connectionsState.value.copy(
-            discoveredEndpoints = _connectionsState.value.discoveredEndpoints + discoveredEndpoint
-        )
+        _discoveredEndpoints = _discoveredEndpoints + discoveredEndpoint
         eventListener.onNewDiscoveredEndpoint(discoveredEndpoint)
     }
 
     private fun removeDiscoveredEndpoint(endpointId: String) {
-        _connectionsState.value = _connectionsState.value.copy(
-            discoveredEndpoints = _connectionsState.value.discoveredEndpoints
-                .filter { it.endpointId != endpointId }
-        )
+        _discoveredEndpoints = _discoveredEndpoints
+            .filter { it.endpointId != endpointId }
     }
 
     private fun addConnectionRequest(
         endpointId: String,
         connectionInfo: ConnectionInfo,
     ) {
-        endpointUsernames += endpointId to connectionInfo.endpointName
         val connectionRequest = ConnectionRequestImpl(
             endpointId = endpointId,
             connectionInfo = connectionInfo,
         )
-        _connectionsState.value = _connectionsState.value.copy(
-            connectionRequests = _connectionsState.value.connectionRequests + connectionRequest
-        )
+        _connectionRequests = _connectionRequests + connectionRequest
         eventListener.onNewConnectionRequest(connectionRequest)
     }
 
     private fun removeConnectionRequest(endpointId: String) {
-        _connectionsState.value = _connectionsState.value.copy(
-            connectionRequests = _connectionsState.value.connectionRequests
-                .filter { it.endpointId != endpointId }
-        )
+        _connectionRequests = _connectionRequests
+            .filter { it.endpointId != endpointId }
     }
 
     private fun addRunningConnection(
         endpointId: String,
+        username: String,
     ) {
         val runningConnection = RunningConnectionImpl(
             endpointId = endpointId,
-            username = endpointUsernames[endpointId]!! // we should have it by now
+            username = username
         )
-        _connectionsState.value = _connectionsState.value.copy(
-            runningConnections = _connectionsState.value.runningConnections + runningConnection
-        )
+        _runningConnections = _runningConnections + runningConnection
         eventListener.onNewRunningConnection(runningConnection)
     }
 
     private fun removeRunningConnection(endpointId: String) {
-        val runningConnection = _connectionsState.value.runningConnections
+        val runningConnection = _runningConnections
             .find { it.endpointId == endpointId } ?: return
-        _connectionsState.value = _connectionsState.value.copy(
-            runningConnections = _connectionsState.value.runningConnections
-                .filter { it != runningConnection }
-        )
+        _runningConnections = _runningConnections
+            .filter { it != runningConnection }
         eventListener.onRunningConnectionLost(runningConnection)
     }
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "$endpointId (${info.endpointName}) initiated connection"
-            )
+            logD("$endpointId (${info.endpointName}) initiated connection")
             addConnectionRequest(
                 endpointId = endpointId,
                 connectionInfo = info
             )
         }
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            when (result.status.statusCode) {
+            val connectionRequest = _connectionRequests.find { it.endpointId == endpointId }
+            if (connectionRequest == null) {
+                val warningMessage = (
+                    "No associated ConnectionRequest found after receiving connection result. " +
+                    "This may result an untracked connection, " +
+                    "so connection will be closed immediately."
+                )
+                logW(warningMessage)
+                _connectionsClient.disconnectFromEndpoint(endpointId)
+                return
+            }
+            val endpointName = connectionRequest.connectionInfo.endpointName
+            val connectionTag = "$endpointId (${endpointName})"
+            when (val statusCode = result.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
-                    Log.d(
-                        "NearbyConnectionsWrapper",
-                        "Connected to $endpointId (${endpointUsernames[endpointId]})"
-                    )
+                    logD("Connected to $connectionTag")
                     removeConnectionRequest(endpointId)
                     addRunningConnection(
-                        endpointId = endpointId
+                        endpointId = endpointId,
+                        username = endpointName
                     )
                 }
                 ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
-                    Log.d(
-                        "NearbyConnectionsWrapper",
-                        "Connection to $endpointId (${endpointUsernames[endpointId]}) rejected"
-                    )
+                    logD("Connection to $connectionTag was rejected")
                     removeConnectionRequest(endpointId)
                 }
                 ConnectionsStatusCodes.STATUS_ERROR -> {
-                    Log.w(
-                        "NearbyConnectionsWrapper",
-                        "Connection status ERROR (${ConnectionsStatusCodes.STATUS_ERROR})"
-                    )
-                    eventListener.onConnectionError(endpointId)
+                    logW("Result of connection to $connectionTag is STATUS_ERROR ($statusCode)")
                 }
                 else -> {
-                    Log.w(
-                        "NearbyConnectionsWrapper",
-                        "Unknown status code: ${result.status.statusCode}"
-                    )
+                    logW("Result of connection to $connectionTag is status code of $statusCode")
                 }
             }
+            if (connectionRequest is ConnectionRequestImpl) {
+                connectionRequest.onConnectionResult?.invoke(result)
+            }
         }
+
         override fun onDisconnected(endpointId: String) {
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "Disconnected from $endpointId (${endpointUsernames[endpointId]})"
-            )
+            logD("Disconnected from $endpointId")
             removeRunningConnection(endpointId)
         }
     }
 
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "Endpoint found: $endpointId (${info.endpointName})"
-            )
+            logD("Endpoint found: $endpointId (${info.endpointName})")
             addDiscoveredEndpoint(
                 endpointId = endpointId,
                 endpointInfo = info,
             )
         }
         override fun onEndpointLost(endpointId: String) {
-            Log.d(
-                "NearbyConnectionsWrapper",
-                "Endpoint lost: $endpointId (${endpointUsernames[endpointId]})"
-            )
+            logD("Endpoint lost: $endpointId")
             removeDiscoveredEndpoint(endpointId)
         }
-    }
-
-    override fun setEventListener(listener: VisyncNearbyConnectionsListener) {
-        eventListener = listener
-    }
-
-    override fun setEventListener(listener: VisyncAdvertiserListener) {
-        setEventListener(object : VisyncNearbyConnectionsListener() {
-
-            override fun onIsAdvertisingChanged(isAdvertising: Boolean)
-                    = listener.onIsAdvertisingChanged(isAdvertising)
-
-            override fun onNewConnectionRequest(request: ConnectionRequest)
-                    = listener.onNewConnectionRequest(request)
-
-            override fun onNewRunningConnection(connection: RunningConnection)
-                    = listener.onNewRunningConnection(connection)
-
-            override fun onRunningConnectionLost(connection: RunningConnection)
-                    = listener.onRunningConnectionLost(connection)
-
-            override fun onNewMessage(message: String, from: RunningConnection)
-                    = listener.onNewMessage(message, from)
-        })
-    }
-
-    override fun asAdvertiser(): VisyncNearbyConnectionsAdvertiser = this
-    override fun asDiscoverer(): VisyncNearbyConnectionsDiscoverer = this
-
-    override fun setEventListener(listener: VisyncDiscovererListener) {
-        setEventListener(object : VisyncNearbyConnectionsListener() {
-
-            override fun onIsDiscoveringChanged(isDiscovering: Boolean)
-                    = listener.onIsDiscoveringChanged(isDiscovering)
-
-            override fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint)
-                    = listener.onNewDiscoveredEndpoint((endpoint))
-
-            override fun onNewConnectionRequest(request: ConnectionRequest)
-                    = listener.onNewConnectionRequest(request)
-
-            override fun onNewRunningConnection(connection: RunningConnection)
-                    = listener.onNewRunningConnection(connection)
-
-            override fun onRunningConnectionLost(connection: RunningConnection)
-                    = listener.onRunningConnectionLost(connection)
-
-            override fun onNewMessage(message: String, from: RunningConnection)
-                    = listener.onNewMessage(message, from)
-        })
     }
 
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             if (payload.type == Payload.Type.BYTES) {
-                payload.asBytes()?.let { receivedBytes ->
-                    val msg = String(receivedBytes, Charsets.UTF_8)
-                    Log.d(
-                        "NearbyConnectionsWrapper",
-                        "Received message: $msg"
+                val bytes = payload.asBytes() ?: return
+                val msg = String(bytes, Charsets.UTF_8)
+                logD("Received message ($msg)")
+                val senderConnection = _runningConnections.find { it.endpointId == endpointId }
+                if (senderConnection == null){
+                    val warningMessage = (
+                        "Received message was from an untracked endpoint. " +
+                        "Connection will be closed immediately."
                     )
-                    val from = connectionsState.value.runningConnections
-                        .find { it.endpointId == endpointId }!!
-                    eventListener.onNewMessage(msg, from)
+                    logW(warningMessage)
+                    _connectionsClient.disconnectFromEndpoint(endpointId)
+                    return
                 }
+                eventListener.onNewMessage(msg, senderConnection)
             }
         }
         override fun onPayloadTransferUpdate(
@@ -432,29 +338,26 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         override val endpointId: String,
         override val endpointInfo: DiscoveredEndpointInfo,
     ) : DiscoveredEndpoint {
-        override fun initiateConnection() {
-            connectionsClient
+        override fun initiateConnection(
+            onTaskFailure: (Exception) -> Unit,
+            onTaskSuccess: () -> Unit,
+        ) {
+            val currentConfig = _config ?: throw Exception("No configuration found")
+            val connectionTag = "$endpointId (${endpointInfo.endpointName})"
+            _connectionsClient
                 .requestConnection(
-                    username,
+                    currentConfig.username,
                     endpointId,
                     connectionLifecycleCallback
                 )
-                .addOnSuccessListener{
-                    Log.d(
-                        "NearbyConnectionsWrapper",
-                        "Successfully sent connection request to " +
-                                "$endpointId (${endpointInfo.endpointName})"
-                    )
+                .addOnSuccessListener {
+                    logD("Successfully sent connection request to $connectionTag")
                     removeDiscoveredEndpoint(endpointId)
+                    onTaskSuccess()
                 }
                 .addOnFailureListener { exception ->
-                    Log.e(
-                        "NearbyConnectionsWrapper",
-                        "Failed to send connection request to " +
-                                "$endpointId (${endpointInfo.endpointName})",
-                        exception
-                    )
-                    removeDiscoveredEndpoint(endpointId)
+                    logE("Failed to send connection request to $connectionTag", exception)
+                    onTaskFailure(exception)
                 }
         }
     }
@@ -463,11 +366,57 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         override val endpointId: String,
         override val connectionInfo: ConnectionInfo,
     ) : ConnectionRequest {
-        override fun accept() {
-            connectionsClient.acceptConnection(endpointId, payloadCallback)
+        var onConnectionResult: ((ConnectionResolution) -> Unit)? = null
+            private set
+
+        private var _isPending = false
+
+        override fun accept(
+            onTaskFailure: (Exception) -> Unit,
+            onTaskSuccess: () -> Unit,
+            onConnectionResult: (ConnectionResolution) -> Unit,
+        ) {
+            if (_isPending) {
+                return
+            }
+            _isPending = true
+            this.onConnectionResult = onConnectionResult
+            val connectionTag = "$endpointId (${connectionInfo.endpointName})"
+            _connectionsClient
+                .acceptConnection(endpointId, payloadCallback)
+                .addOnSuccessListener {
+                    logD("Successfully sent connection accept message to $connectionTag")
+                    onTaskSuccess()
+                    _isPending = false
+                }
+                .addOnFailureListener { exception ->
+                    logE("Failed to send connection accept message to $connectionTag", exception)
+                    onTaskFailure(exception)
+                    _isPending = false
+                }
         }
-        override fun reject() {
-            connectionsClient.rejectConnection(endpointId)
+
+        override fun reject(
+            onTaskFailure: (Exception) -> Unit,
+            onTaskSuccess: () -> Unit,
+        ) {
+            if (_isPending) {
+                return
+            }
+            _isPending = true
+            val connectionTag = "$endpointId (${connectionInfo.endpointName})"
+            _connectionsClient
+                .rejectConnection(endpointId)
+                .addOnSuccessListener {
+                    logD("Successfully sent connection reject message to $connectionTag")
+                    onTaskSuccess()
+                    _isPending = false
+                }
+                .addOnFailureListener { exception ->
+                    logE("Failed to send connection reject message to $connectionTag", exception)
+                    onTaskFailure(exception)
+                    _isPending = false
+                }
         }
     }
 
@@ -475,12 +424,34 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         override val endpointId: String,
         override val username: String,
     ) : RunningConnection {
-        override fun sendMessage(msg: String) {
-            sendMessage(msg = msg, receiver = this)
+        override fun sendMessage(
+            msg: String,
+            onTaskFailure: (Exception) -> Unit,
+            onTaskSuccess: () -> Unit,
+        ) {
+            sendMessage(
+                msg = msg,
+                receiver = this,
+                onTaskFailure = onTaskFailure,
+                onTaskSuccess = onTaskSuccess,
+            )
         }
+
         override fun disconnect() {
-            connectionsClient.disconnectFromEndpoint(endpointId)
+            _connectionsClient.disconnectFromEndpoint(endpointId)
             removeRunningConnection(endpointId)
         }
+    }
+
+    private fun logD(msg: String) {
+        Log.d(VisyncNearbyConnectionsImpl::class.simpleName, msg)
+    }
+
+    private fun logW(msg: String) {
+        Log.w(VisyncNearbyConnectionsImpl::class.simpleName, msg)
+    }
+
+    private fun logE(msg: String, e: Exception) {
+        Log.e(VisyncNearbyConnectionsImpl::class.simpleName, msg, e)
     }
 }
