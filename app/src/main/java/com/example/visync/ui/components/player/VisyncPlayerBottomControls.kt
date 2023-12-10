@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import com.example.visync.R
 
 @Composable
@@ -120,4 +121,18 @@ fun SeekToNextIconButton(
             contentDescription = stringResource(R.string.desc_seek_next)
         )
     }
+}
+
+@Preview
+@Composable
+fun VisyncPlayerBottomControlsPreview() {
+    VisyncPlayerBottomControls(
+        isVideoPlaying = false,
+        pause = {},
+        unpause = {},
+        seekToPrev = {},
+        seekToNext = {},
+        modifier = Modifier,
+        onAnyInteraction = {},
+    )
 }

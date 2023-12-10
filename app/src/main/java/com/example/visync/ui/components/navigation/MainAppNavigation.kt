@@ -1,5 +1,6 @@
 package com.example.visync.ui.components.navigation
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,10 +10,12 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -21,15 +24,24 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun MainAppNavigation(
+    isDarkTheme: Boolean,
+    setDarkTheme: (Boolean) -> Unit,
     uiState: MainAppNavigationUiState,
     navigationType: NavigationType,
     navController: NavHostController,
     appContent: @Composable MainAppNavigationScope.() -> Unit,
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val railAndDrawerScrollState = rememberScrollState()
+
+    val railScrollState = rememberScrollState()
+    val drawerScrollState = rememberScrollState()
+    val railAndDrawerScrollState = remember {
+        RailAndDrawerScrollState(railScrollState, drawerScrollState)
+    }
+    SynchronizeScrolls(railScrollState, drawerScrollState)
 
     val coroutineScope = rememberCoroutineScope()
+
 
     val mainAppNavigationScope = remember {
         MainAppNavigationScope(
@@ -54,12 +66,14 @@ fun MainAppNavigation(
             ModalNavigationDrawer(
                 drawerContent = {
                     ModalNavigationDrawerContent(
+                        isDarkTheme = isDarkTheme,
+                        setDarkTheme = setDarkTheme,
                         selectedDestination = selectedDestination,
                         navigateToDestination = {
                             navigationActions.navigateTo(it.routeString)
                             mainAppNavigationScope.closeDrawer()
                         },
-                        scrollState = railAndDrawerScrollState,
+                        scrollState = drawerScrollState,
                         showMainDestinations = false,
                         closeDrawer = {
                             mainAppNavigationScope.closeDrawer()
@@ -91,12 +105,14 @@ fun MainAppNavigation(
             ModalNavigationDrawer(
                 drawerContent = {
                     ModalNavigationDrawerContent(
+                        isDarkTheme = isDarkTheme,
+                        setDarkTheme = setDarkTheme,
                         selectedDestination = selectedDestination,
                         navigateToDestination = {
                             navigationActions.navigateTo(it.routeString)
                             mainAppNavigationScope.closeDrawer()
                         },
-                        scrollState = railAndDrawerScrollState,
+                        scrollState = drawerScrollState,
                         showMainDestinations = true,
                         closeDrawer = {
                             mainAppNavigationScope.closeDrawer()
@@ -111,15 +127,18 @@ fun MainAppNavigation(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     VisyncNavigationRail(
+                        isDarkTheme = isDarkTheme,
+                        setDarkTheme = setDarkTheme,
                         selectedDestination = selectedDestination,
                         navigateToDestination = {
                             navigationActions.navigateTo(it.routeString)
                         },
-                        scrollState = railAndDrawerScrollState,
+                        scrollState = railScrollState,
                         openDrawer = {
                             mainAppNavigationScope.openDrawer()
                         },
-                        alwaysShowDestinationLabels = false
+                        alwaysShowDestinationLabels = false,
+                        editablePhysicalDevice = uiState.editablePhysicalDevice
                     )
                     Box(
                         modifier = Modifier.weight(1f)
@@ -136,11 +155,13 @@ fun MainAppNavigation(
             CollapsableNavigationDrawer(
                 drawerContent = {
                     CollapsableNavigationDrawerContent(
+                        isDarkTheme = isDarkTheme,
+                        setDarkTheme = setDarkTheme,
                         selectedDestination = selectedDestination,
                         navigateToDestination = {
                             navigationActions.navigateTo(it.routeString)
                         },
-                        scrollState = rememberScrollState(),
+                        scrollState = railAndDrawerScrollState,
                         drawerState = collapsableDrawerState,
                         editableUsername = uiState.editableUsername,
                         editablePhysicalDevice = uiState.editablePhysicalDevice
@@ -148,6 +169,41 @@ fun MainAppNavigation(
                 }
             ) {
                 mainAppNavigationScope.appContent()
+            }
+        }
+    }
+}
+
+@Composable
+fun SynchronizeScrolls(
+    scrollState1: ScrollState,
+    scrollState2: ScrollState,
+) {
+    var lastScrollIsScroll1 by remember { mutableStateOf(true) }
+    LaunchedEffect(scrollState1.value, scrollState2.value) {
+        if (scrollState1.isScrollInProgress) {
+            lastScrollIsScroll1 = true
+        } else if (scrollState2.isScrollInProgress) {
+            lastScrollIsScroll1 = false
+        }
+        if (lastScrollIsScroll1) {
+            if (!scrollState2.isScrollInProgress) {
+                scrollState2.scrollTo(scrollState1.value)
+            }
+        } else {
+            scrollState1.scrollTo(scrollState2.value)
+        }
+    }
+    val anyScrollInProgress = (
+        scrollState1.isScrollInProgress ||
+        scrollState2.isScrollInProgress
+    )
+    if (scrollState1.value != scrollState2.value && !anyScrollInProgress) {
+        LaunchedEffect(Unit) {
+            if (lastScrollIsScroll1) {
+                scrollState2.scrollTo(scrollState1.value)
+            } else {
+                scrollState1.scrollTo(scrollState2.value)
             }
         }
     }
@@ -161,3 +217,8 @@ class MainAppNavigationScope(
 enum class NavigationType {
     BOTTOM_NAVBAR_AND_DRAWER, RAIL_AND_DRAWER, CUSTOM_PERMANENT_DRAWER
 }
+
+data class RailAndDrawerScrollState(
+    val railScrollState: ScrollState,
+    val drawerScrollState: ScrollState,
+)

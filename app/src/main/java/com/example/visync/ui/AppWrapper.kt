@@ -1,12 +1,12 @@
 package com.example.visync.ui
 
-import android.util.Log
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -17,18 +17,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.visync.connections.RunningConnection
-import com.example.visync.connections.VisyncNearbyConnections
-import com.example.visync.messaging.JsonVisyncMessageConverter
-import com.example.visync.messaging.PlaybackPauseUnpauseMessage
-import com.example.visync.messaging.PlaybackSeekToMessage
-import com.example.visync.messaging.PlaybackSeekToPrevNextMessage
-import com.example.visync.messaging.VisyncMessage
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
 import com.example.visync.ui.screens.main.MainAppViewModel
-import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupViewModel
 import com.example.visync.ui.screens.player.VideoConfiguration
 import com.example.visync.ui.screens.player.VisyncPlayer
 import com.example.visync.ui.screens.player.VisyncPlayerViewModel
@@ -36,6 +28,8 @@ import com.example.visync.ui.screens.player.VisyncPlayerViewModel
 @Composable
 fun AppWrapper(
     windowSize: WindowSizeClass,
+    isDarkTheme: Boolean,
+    setDarkTheme: (Boolean) -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -61,7 +55,7 @@ fun AppWrapper(
     val visyncPlayerViewModel = hiltViewModel<VisyncPlayerViewModel>()
     val visyncPlayerUiState by visyncPlayerViewModel
         .uiState.collectAsStateWithLifecycle()
-    val visyncPLayerPlaybackState by visyncPlayerViewModel
+    val visyncPlayerPlaybackState by visyncPlayerViewModel
         .playerWrapper.playbackState.collectAsStateWithLifecycle()
 
     val finalPlaybackSetupOutput = remember { mutableStateOf<PlaybackSetupOutput?>(null) }
@@ -88,6 +82,8 @@ fun AppWrapper(
             val playbackControls = visyncPlayerViewModel.playerWrapper.playbackControls
             MainApp(
                 windowSize = windowSize,
+                isDarkTheme = isDarkTheme,
+                setDarkTheme = setDarkTheme,
                 mainAppUiState = mainAppUiState,
                 mainAppNavigationUiState = sideNavigationUiState,
                 play = { playbackStartOptions, playbackSetupOutput ->
@@ -106,12 +102,26 @@ fun AppWrapper(
             enterTransition = { fadeIn(snap(transitionDelayMillis)) },
             exitTransition = { ExitTransition.None }
         ) {
+            val enterAsHost = finalPlaybackSetupOutput.value!!.isUserHost
+            DisposableEffect(Unit) {
+                if (enterAsHost) {
+                    visyncPlayerViewModel.listenToNearbyConnectionsAsHost()
+                    visyncPlayerViewModel.startPinging()
+                } else {
+                    visyncPlayerViewModel.listenToNearbyConnectionsAsGuest()
+                }
+                onDispose {
+                    visyncPlayerViewModel.stopPinging()
+                    visyncPlayerViewModel.stopListeningToNearbyConnections()
+                }
+            }
             VisyncPlayer(
                 playerUiState = visyncPlayerUiState,
-                playerPlaybackState = visyncPLayerPlaybackState,
+                playerPlaybackState = visyncPlayerPlaybackState,
                 playerPlaybackControls = visyncPlayerViewModel.playerWrapper.playbackControls,
                 videoConfiguration = finalPlaybackSetupOutput.value!!.videoConfiguration,
-                isUserHost = finalPlaybackSetupOutput.value!!.isUserHost,
+                isUserHost = enterAsHost,
+                hostMessenger = visyncPlayerViewModel.hostPlayerMessenger,
                 physicalDevice = sideNavigationUiState.editablePhysicalDevice.value,
                 showOverlay = visyncPlayerViewModel::showOverlay,
                 hideOverlay = visyncPlayerViewModel::hideOverlay,
@@ -120,74 +130,8 @@ fun AppWrapper(
                     finalPlaybackSetupOutput.value!!.resetAllConnections()
                 },
                 player = visyncPlayerViewModel.playerWrapper.getPlayer(),
-                messageSender = finalPlaybackSetupOutput.value!!.messageSender
             )
         }
-    }
-}
-
-interface PlayerMessageSender {
-    fun sendSeekToPrevMessage()
-    fun sendSeekToNextMessage()
-    fun sendPauseMessage()
-    fun sendUnpauseMessage()
-    fun sendSeekToMessage(seekTo: Float)
-    fun sendSeekToMessage(seekTo: Long)
-}
-
-fun getPlayerMessageSender(
-    playbackSetupViewModel: PlaybackSetupViewModel,
-    playbackSetupConnections: VisyncNearbyConnections
-) = object : PlayerMessageSender {
-
-    private val messageConverter = JsonVisyncMessageConverter()
-
-    private fun getApprovedWatchersConnections(): List<RunningConnection> {
-        val approvedIds = playbackSetupViewModel.playbackSetupState.value.otherWatchers
-            .filter { it.isApproved }
-            .map { it.endpointId }
-        return playbackSetupConnections.connectionsState.value.runningConnections
-            .filter { it.endpointId in approvedIds }
-    }
-
-    private inline fun <reified T: VisyncMessage> encodeAndSend(fullMessage: T) {
-        Log.d("shit", "sending msg from player controls!!!!")
-        val encodedMsg = messageConverter.encode(fullMessage)
-        playbackSetupConnections.sendMessageToMultiple(
-            msg = encodedMsg,
-            receivers = getApprovedWatchersConnections()
-        )
-    }
-
-    override fun sendSeekToPrevMessage() {
-        val seekToMessage = PlaybackSeekToPrevNextMessage(toPrev = true)
-        encodeAndSend(seekToMessage)
-    }
-    override fun sendSeekToNextMessage() {
-        val seekToMessage = PlaybackSeekToPrevNextMessage(toPrev = false)
-        encodeAndSend(seekToMessage)
-    }
-    override fun sendPauseMessage() {
-        val pauseUnpauseMessage = PlaybackPauseUnpauseMessage(doPause = true)
-        encodeAndSend(pauseUnpauseMessage)
-    }
-    override fun sendUnpauseMessage() {
-        val pauseUnpauseMessage = PlaybackPauseUnpauseMessage(doPause = false)
-        encodeAndSend(pauseUnpauseMessage)
-    }
-    override fun sendSeekToMessage(seekTo: Float) {
-        val seekToMessage = PlaybackSeekToMessage(
-            seekToLong = null,
-            seekToFloat = seekTo
-        )
-        encodeAndSend(seekToMessage)
-    }
-    override fun sendSeekToMessage(seekTo: Long) {
-        val seekToMessage = PlaybackSeekToMessage(
-            seekToLong = seekTo,
-            seekToFloat = null
-        )
-        encodeAndSend(seekToMessage)
     }
 }
 
@@ -195,5 +139,4 @@ class PlaybackSetupOutput(
     val videoConfiguration: VideoConfiguration,
     val isUserHost: Boolean,
     val resetAllConnections: () -> Unit,
-    val messageSender: PlayerMessageSender,
 )

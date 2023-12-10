@@ -1,5 +1,6 @@
 package com.example.visync.ui.components.player
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -15,7 +17,9 @@ import androidx.compose.ui.graphics.RectangleShape
 import com.example.visync.data.videofiles.Videofile
 import com.example.visync.player.PlayerWrapperPlaybackControls
 import com.example.visync.player.PlayerWrapperPlaybackState
-import com.example.visync.ui.PlayerMessageSender
+import com.example.visync.ui.screens.player.HostPlayerMessenger
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun VisyncPlayerOverlay(
@@ -23,7 +27,7 @@ fun VisyncPlayerOverlay(
     playbackState: PlayerWrapperPlaybackState,
     playbackControls: PlayerWrapperPlaybackControls,
     isUserHost: Boolean,
-    messageSender: PlayerMessageSender,
+    hostMessenger: HostPlayerMessenger,
     onOverlayClicked: () -> Unit,
     closePlayer: () -> Unit,
     modifier: Modifier = Modifier,
@@ -59,6 +63,7 @@ fun VisyncPlayerOverlay(
                 )
         )
         Column(modifier = backgroundModifier) {
+            val coroutineScope = rememberCoroutineScope()
             VideoProgressSliderWrapper(
                 useAnimatedSlider = true,
                 adjustAnimation = false,
@@ -67,7 +72,21 @@ fun VisyncPlayerOverlay(
                 currentPositionPollingInterval = playbackState.currentPositionPollingInterval,
                 playbackSpeed = playbackState.playbackSpeed,
                 isPlaying = playbackState.isPlaying,
-                seekTo = playbackControls::seekTo,
+                seekTo = { seekTo ->
+                    if (isUserHost) {
+                        val videoDuration = playbackState.currentVideoDuration
+                        val timeMillis = (videoDuration * seekTo).toLong()
+                        hostMessenger.sendSeekTo(timeMillis)
+                        val pingData = hostMessenger.getPingData()
+                        val actionDelay = pingData.maxOf { it.pingData.weightedAverage }.toLong()
+                        coroutineScope.launch {
+                            delay(actionDelay)
+                            playbackControls.seekTo(seekTo)
+                        }
+                        return@VideoProgressSliderWrapper
+                    }
+                    playbackControls.seekTo(seekTo)
+                },
                 onSliderDragStart = disableAutoHiding,
                 onSliderDragEnd = enableAutoHiding,
                 modifier = Modifier.fillMaxWidth()
@@ -76,25 +95,40 @@ fun VisyncPlayerOverlay(
                 isVideoPlaying = playbackState.isPlaying,
                 pause = {
                     if (isUserHost) {
-                        messageSender.sendPauseMessage()
+                        hostMessenger.sendPause()
+                        val pingData = hostMessenger.getPingData()
+                        val actionDelay = pingData.maxOf { it.pingData.weightedAverage }.toLong()
+                        // actually we don't want any delay since all watchers seek to our pause position
+                        playbackControls.pause()
+                        return@VisyncPlayerBottomControls
                     }
                     playbackControls.pause()
                 },
                 unpause = {
                     if (isUserHost) {
-                        messageSender.sendUnpauseMessage()
+                        hostMessenger.sendUnpause()
+                        val pingData = hostMessenger.getPingData()
+                        val actionDelay = pingData.maxOf {
+                            Log.d("avg", "${it.pingData.weightedAverage}")
+                            it.pingData.weightedAverage
+                        }.toLong()
+                        coroutineScope.launch {
+                            delay(actionDelay)
+                            playbackControls.unpause()
+                        }
+                        return@VisyncPlayerBottomControls
                     }
                     playbackControls.unpause()
                 },
                 seekToPrev = {
                     if (isUserHost) {
-
+                        // TODO
                     }
                     playbackControls.seekToPrevious()
                 },
                 seekToNext = {
                     if (isUserHost) {
-
+                        // TODO
                     }
                     playbackControls.seekToNext()
                 },

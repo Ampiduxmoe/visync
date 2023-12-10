@@ -2,9 +2,15 @@ package com.example.visync.ui.screens.main.playback_setup
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -15,28 +21,32 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -44,25 +54,35 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.visync.R
+import com.example.visync.messaging.SyncBallMessage
 import com.example.visync.metadata.VideoMetadata
-import com.example.visync.ui.screens.player.VisyncPhysicalDevice
 import com.example.visync.ui.screens.settings.getProfilePreferences
-import kotlinx.serialization.Serializable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.lang.IllegalArgumentException
+import kotlin.math.absoluteValue
 
 @Composable
 fun SetupTabPeople(
     isUserHost: Boolean,
+    isAdvertising: Boolean,
     hostAsWatcher: Watcher,
     meAsWatcher: Watcher,
     notApprovedWatchers: List<Watcher>,
     approvedWatchers: List<Watcher>,
-    videoMetadata: VideoMetadata,
-    setFinalDevicePositionConfiguration: (FinalDevicePositionConfiguration) -> Unit,
+    watcherPings: List<SingleEndpointPings>?,
+    videoMetadata: VideoMetadata?,
+    positionsEditor: DevicePositionsEditor?,
+    saveDevicePositions: (DevicePositionsEditor) -> Unit,
+    sendSyncBall: suspend (Offset, Offset) -> Unit,
+    setGuestCallbacks: (GuestSpecificCallbacks) -> Unit,
     notApprovedWatcherModifier: (Watcher) -> Modifier,
     approvedWatcherModifier: (Watcher) -> Modifier,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val watcherColor: (Watcher) -> Color = { watcher ->
         when (watcher.messagingVersion != meAsWatcher.messagingVersion) {
             true -> Color.Red // versions conflict
@@ -70,86 +90,228 @@ fun SetupTabPeople(
         }
     }
     val watcherText: (Watcher) -> String = { watcher ->
-        if (watcher == meAsWatcher && meAsWatcher.username.isEmpty()) {
-            val backupUsername = getUsername(context)
-            val maybeHost = if (hostAsWatcher.username == backupUsername) " (host)" else "" // redo
-            "$backupUsername$maybeHost (me)"
-        } else {
-            val maybeHost = if (watcher == hostAsWatcher) " (host)" else ""
-            val maybeMe = if (watcher == meAsWatcher) " (me)" else ""
-            "${watcher.username} [${watcher.endpointId}]$maybeHost$maybeMe"
-        }
-    }
-
-    val distinctColors = remember { listOf(
-        0xFF4cb4f0,
-        0xFFff9a00,
-        0xFF0b9f57,
-        0xFFb0daec,
-        0xFFffea87,
-        0xFFffcdd7,
-    ) }
-    val colorsCount = remember { distinctColors.count() }
-    var nextColorIndex = 0
-    val nextColor = {
-        distinctColors[nextColorIndex].also { nextColorIndex = (nextColorIndex + 1) % colorsCount }
+        val maybeHost = if (watcher === hostAsWatcher) " (host)" else ""
+        val maybeMe = if (watcher === meAsWatcher) " (me)" else ""
+        "${watcher.username} [${watcher.endpointId}]$maybeHost$maybeMe"
     }
     var showDevicesPositionEditor by remember { mutableStateOf(false) }
-    if (showDevicesPositionEditor) {
+    if (showDevicesPositionEditor && positionsEditor != null) {
         DevicesPositionConfigurationEditor(
-            approvedWatchers = approvedWatchers.map {
-                WatcherTag(
-                    username = it.username,
-                    endpointId = it.endpointId,
-                    colorValue = nextColor(),
-                    physicalDevice = it.physicalDevice
-                )
-            },
-            videoMetadata = videoMetadata,
-            setFinalDevicePositionConfiguration = setFinalDevicePositionConfiguration,
+            positionsEditor = positionsEditor,
+            saveDevicePositions = saveDevicePositions,
             closeEditor = { showDevicesPositionEditor = false }
         )
     }
 
-    Row(modifier = modifier) {
+    val infiniteTransition = rememberInfiniteTransition()
+    val connectingAnimationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing)
+        )
+    )
+
+    var dragStartPos by remember { mutableStateOf(Offset.Zero) }
+    var dragEndPos by remember { mutableStateOf(Offset.Zero) }
+    var syncBall by remember { mutableStateOf<Offset?>(null) }
+    var syncBallLaunchTimestamp by remember { mutableLongStateOf(0L) }
+    var syncBallVelocity by remember { mutableStateOf(Offset.Zero) }
+    val coroutineScope = rememberCoroutineScope()
+    var syncBallHandlerJob by remember { mutableStateOf<Job?>(null) }
+    val launchBallAsHost = { initialPosition: Offset, initialVelocity: Offset ->
+        coroutineScope.launch(Dispatchers.IO) {
+            syncBallHandlerJob?.cancelAndJoin()
+            sendSyncBall(initialPosition, initialVelocity) // suspend call to wait until all receivers have the message
+            syncBall = initialPosition
+            syncBallLaunchTimestamp = getCurrentTimestamp()
+            syncBallVelocity = initialVelocity
+            syncBallHandlerJob = launch {
+                var prevTimestamp = syncBallLaunchTimestamp
+                while (true) {
+                    if (syncBall == null) { break }
+                    val currentTimestamp = getCurrentTimestamp()
+                    val deltaTime = currentTimestamp - prevTimestamp
+                    prevTimestamp = currentTimestamp
+                    syncBall = syncBall?.let { it + syncBallVelocity * deltaTime.toFloat() / 1000f }
+                    syncBallVelocity *= 0.95f
+                    if (syncBallVelocity.getDistanceSquared() < 0.01f) {
+                        syncBallVelocity = Offset.Zero
+                    }
+                    delay(16L)
+                }
+            }
+            launch {
+                delay(3000L)
+                syncBallHandlerJob?.cancelAndJoin()
+                syncBallHandlerJob = null
+                syncBall = null
+            }
+        }
+    }
+    val launchBallAsGuest = { initialPosition: Offset, initialVelocity: Offset ->
+        coroutineScope.launch(Dispatchers.IO) {
+            syncBallHandlerJob?.cancelAndJoin()
+            syncBall = initialPosition
+            syncBallLaunchTimestamp = getCurrentTimestamp()
+            syncBallVelocity = initialVelocity
+            syncBallHandlerJob = launch {
+                var prevTimestamp = syncBallLaunchTimestamp
+                while (true) {
+                    if (syncBall == null) { break }
+                    val currentTimestamp = getCurrentTimestamp()
+                    val deltaTime = currentTimestamp - prevTimestamp
+                    prevTimestamp = currentTimestamp
+                    syncBall = syncBall?.let { it + syncBallVelocity * deltaTime.toFloat() / 1000f }
+                    syncBallVelocity *= 0.95f
+                    if (syncBallVelocity.getDistanceSquared() < 0.01f) {
+                        syncBallVelocity = Offset.Zero
+                    }
+                    delay(16L)
+                }
+            }
+            launch {
+                delay(3000L)
+                syncBallHandlerJob?.cancelAndJoin()
+                syncBallHandlerJob = null
+                syncBall = null
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (!isUserHost) {
+            Log.d("Test", "there goes sync ball callback set action")
+            return@LaunchedEffect
+            setGuestCallbacks(object: EmptyGuestSpecificCallbacks() {
+                override fun onSyncBallMessage(sender: EndpointInfo, message: SyncBallMessage) {
+                    coroutineScope.launch {
+                        val myPingEntry = message.pingData
+                            .find { it.endpointId == meAsWatcher.endpointId } ?: return@launch
+                        val maxPing = message.pingData
+                            .maxBy { it.pingData.weightedAverage }.pingData.weightedAverage
+                        val pingDelta = maxPing - myPingEntry.pingData.weightedAverage
+                        delay(pingDelta.toLong() / 2)
+                        launchBallAsGuest(
+                            /* initialPosition = */ Offset(x = message.posX, y = message.posY),
+                            /* initialVelocity = */ Offset(x = message.velocityX, y = message.velocityY)
+                        )
+                    }
+                }
+            })
+        }
+    }
+    Column(
+        modifier = if (!isUserHost) modifier
+            else (
+                modifier
+                .pointerInput(Unit) {
+                    detectDragGestures(
+                        onDragStart = {
+                            dragStartPos = it
+                            dragEndPos = it
+                        },
+                        onDragEnd = {
+                            launchBallAsHost(
+                                /* initialPosition = */ dragStartPos,
+                                /* initialVelocity = */ (dragEndPos - dragStartPos) * -6f
+                            )
+                        },
+                        onDrag = { _, dragAmount ->
+                            dragEndPos += dragAmount
+                        },
+                    )
+                }
+            )
+            .drawBehind {
+                val localSyncBallCopy = syncBall ?: return@drawBehind
+                drawCircle(
+                    color = Color.Yellow,
+                    radius = 50f,
+                    center = localSyncBallCopy,
+                    alpha = 0.5f,
+                    style = Fill,
+                )
+            }
+    ) {
         Column(modifier = Modifier.weight(1f)) {
             Text("requests:")
-            for (watcher in notApprovedWatchers) {
-                Text(
-                    text = watcherText(watcher),
-                    color = watcherColor(watcher),
-                    modifier = notApprovedWatcherModifier(watcher)
+            if (isAdvertising) {
+                Icon(
+                    painter = painterResource(
+                        id = R.drawable.ic_cut_circle
+                    ),
+                    contentDescription = stringResource(
+                        id = R.string.desc_loading_icon
+                    ),
+                    modifier = Modifier.graphicsLayer {
+                        this.rotationZ = connectingAnimationAngle
+                    }
                 )
+            }
+            for (watcher in notApprovedWatchers) {
+                Row(horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Text(
+                        text = watcherText(watcher),
+                        color = watcherColor(watcher),
+                        modifier = notApprovedWatcherModifier(watcher)
+                    )
+                    if (watcherPings != null) {
+                        val avgPing = watcherPings.find { it.endpointId == watcher.endpointId }
+                        if (avgPing != null) {
+                            Text("${avgPing.pingData.weightedAverage}")
+                        }
+                    }
+                    if (!watcher.canBeApproved) { // still in handshake phase
+                        Icon(
+                            painter = painterResource(
+                                id = R.drawable.ic_cut_circle
+                            ),
+                            contentDescription = stringResource(
+                                id = R.string.desc_loading_icon
+                            ),
+                            modifier = Modifier.graphicsLayer {
+                                this.rotationZ = connectingAnimationAngle
+                            }
+                        )
+                    }
+                }
             }
         }
         Column(modifier = Modifier.weight(1f)) {
             Text("approved:")
             for (watcher in approvedWatchers) {
-                Text(
-                    text = watcherText(watcher),
-                    color = watcherColor(watcher),
-                    modifier = approvedWatcherModifier(watcher)
-                )
+                Row(horizontalArrangement = Arrangement.SpaceEvenly) {
+                    Text(
+                        text = watcherText(watcher),
+                        color = watcherColor(watcher),
+                        modifier = approvedWatcherModifier(watcher)
+                    )
+                    if (watcherPings != null) {
+                        val avgPing = watcherPings.find { it.endpointId == watcher.endpointId }
+                        if (avgPing != null) {
+                            Text("${avgPing.pingData.weightedAverage}")
+                        }
+                    }
+                }
             }
         }
+        Text(
+            text = "show config",
+            modifier = Modifier.clickable { showDevicesPositionEditor = true }
+        )
     }
-    Text(
-        text = "show config",
-        modifier = Modifier.clickable { showDevicesPositionEditor = true }
-    )
 }
 
 @Composable
 fun DevicesPositionConfigurationEditor(
-    approvedWatchers: List<WatcherTag>,
-    videoMetadata: VideoMetadata,
-    setFinalDevicePositionConfiguration: (FinalDevicePositionConfiguration) -> Unit,
+    positionsEditor: DevicePositionsEditor,
+    saveDevicePositions: (DevicePositionsEditor) -> Unit,
     closeEditor: () -> Unit,
 ) {
     val dialogMinWidth = 280.dp
     val dialogMaxWidth = 560.dp
 
-    val pxScreenWidth = 1080f
+    val pxScreenWidth = 1080f // TODO: get real device dimensions
     val fractionEditorWidth = 0.8f
     val pxEditorWidth = pxScreenWidth * fractionEditorWidth
     val targetDialogWidth = with(LocalDensity.current) {
@@ -165,165 +327,55 @@ fun DevicesPositionConfigurationEditor(
     val editorHeight = targetDialogHeight
     val editorWidth = targetDialogWidth
 
-    var devicesInfo by remember { mutableStateOf(
-        approvedWatchers.mapIndexed { index, watcherTag ->
-            val physicalDevice = watcherTag.physicalDevice
-            watcherTag to DeviceOnCanvas(
-                mmOffsetX = index * 100f,
-                mmOffsetY = 0f,
-                mmDisplayWidth = physicalDevice.mmDisplayWidth,
-                mmDisplayHeight = physicalDevice.mmDisplayHeight,
-                mmDeviceWidth = physicalDevice.mmDisplayWidth, // TODO: do not forget to change it back to device width
-                mmDeviceHeight = physicalDevice.mmDisplayHeight,
-            )
-        }.toMap()
-    ) }
-    Log.d("tag", "approved count = ${approvedWatchers.count()}, devicesInfo count = ${devicesInfo.entries.count()}")
-    var videoOnCanvas by remember { mutableStateOf(
-        VideoOnCanvas(
-            mmOffsetX = 0f,
-            mmOffsetY = 0f,
-            mmWidth = videoMetadata.width / 10,
-            mmHeight = videoMetadata.height / 10,
-        )
-    ) }
-    var canvasCameraView by remember { mutableStateOf(
-        CanvasCameraView(
-            mmViewOffsetX = 0f,
-            mmViewOffsetY = 0f,
-            zoom = 1f
-        )
-    ) }
     val mmOfRealWidthEditorShouldFit = 150f
 
-    val mmToPxMultiplier = pxEditorWidth / mmOfRealWidthEditorShouldFit * canvasCameraView.zoom
-    val pxToMmMultiplier = mmOfRealWidthEditorShouldFit / (pxEditorWidth * canvasCameraView.zoom)
-    val mmToDpMultiplier = mmToPxMultiplier / LocalDensity.current.density
-    val dpToMmMultiplier = LocalDensity.current.density / mmToPxMultiplier
+    var video by remember { mutableStateOf(positionsEditor.videoOnEditor) }
+    var devices by remember { mutableStateOf(positionsEditor.devicesOnEditor) }
+    var camera by remember { mutableStateOf(positionsEditor.cameraView) }
+
+    LaunchedEffect(positionsEditor.devicesOnEditor) {
+        // TODO remove or add local device
+    }
+
+    val localDensity = LocalDensity.current.density
+    val mmToPxMultiplier = pxEditorWidth / mmOfRealWidthEditorShouldFit * camera.zoom
+    val pxToMmMultiplier = mmOfRealWidthEditorShouldFit / (pxEditorWidth * camera.zoom)
+    val mmToDpMultiplier = mmToPxMultiplier / localDensity
+    val dpToMmMultiplier = localDensity / mmToPxMultiplier
 
     val mmToPx = { mm: Float -> (mm * mmToPxMultiplier) }
     val pxToMm = { px: Float -> (px * pxToMmMultiplier) }
     val mmToDp = { mm: Float -> (mm * mmToDpMultiplier).dp }
     val dpToMm = { dp: Dp -> (dp.value * dpToMmMultiplier) }
 
-    var selectedTags by remember { mutableStateOf(emptyList<WatcherTag>()) }
-    val addTagToSelection = { tag: WatcherTag ->
-        selectedTags = selectedTags + tag
+    var selectedDevicesWatcherInfo by remember {
+        mutableStateOf(emptyList<WatcherInfo>())
     }
-    val removeTagFromSelection = { tag: WatcherTag ->
-        selectedTags = selectedTags.filter { it != tag }
+    val addDeviceToSelection = { device: DeviceOnEditor ->
+        selectedDevicesWatcherInfo = selectedDevicesWatcherInfo + device.watcherInfo
     }
-    val clearSelectedTags = {
-        selectedTags = emptyList()
+    val removeDeviceFromSelection = { device: DeviceOnEditor ->
+        selectedDevicesWatcherInfo = selectedDevicesWatcherInfo.filter { it != device.watcherInfo }
     }
-    val fakeTag = remember {
-        WatcherTag(
-            username = "FakeName",
-            endpointId = "FakeEndpointId",
-            physicalDevice = VisyncPhysicalDevice(
-                mmDeviceWidth = 0f,
-                mmDeviceHeight = 0f,
-                mmDisplayWidth = 0f,
-                mmDisplayHeight = 0f,
-                pxDisplayWidth = 0f,
-                pxDisplayHeight = 0f
-            )
-        )
-    }
-    val videoTag = remember {
-        WatcherTag(
-            username = "${videoMetadata.filename}",
-            endpointId = "${videoMetadata.width} * ${videoMetadata.height}",
-            physicalDevice = VisyncPhysicalDevice(
-                mmDeviceWidth = 0f,
-                mmDeviceHeight = 0f,
-                mmDisplayWidth = 0f,
-                mmDisplayHeight = 0f,
-                pxDisplayWidth = 0f,
-                pxDisplayHeight = 0f
-            )
-        )
+    var isVideoSelected by remember { mutableStateOf(false) }
+    val clearDeviceSelection = {
+        selectedDevicesWatcherInfo = emptyList()
+        isVideoSelected = false
     }
 
-    LaunchedEffect(approvedWatchers) {
-        val storedTagsSorted = devicesInfo.keys.sortedBy { it.endpointId }
-        val newTagsSorted = approvedWatchers.sortedBy { it.endpointId }
-        if (storedTagsSorted != newTagsSorted) {
-            // filter
-            val newDevicesInfo = devicesInfo.filterKeys { it in approvedWatchers }.toMutableMap()
-
-            // add new
-            val newWatchers = approvedWatchers.filter { it !in newDevicesInfo.keys }
-            newDevicesInfo += newWatchers.mapIndexed { index, watcherTag ->
-                val physicalDevice = watcherTag.physicalDevice
-                watcherTag to DeviceOnCanvas(
-                    mmOffsetX = index * 100f,
-                    mmOffsetY = 0f,
-                    mmDisplayWidth = physicalDevice.mmDisplayWidth,
-                    mmDisplayHeight = physicalDevice.mmDisplayHeight,
-                    mmDeviceWidth = physicalDevice.mmDisplayWidth, // TODO: do not forget to change it back to device width
-                    mmDeviceHeight = physicalDevice.mmDisplayHeight,
-                )
-            }.toMap()
-
-            // replace
-            devicesInfo = newDevicesInfo
-        }
-    }
     var mmPointerOnEditor by remember { mutableStateOf(Offset(0f, 0f)) }
     var truePointerPos by remember { mutableStateOf(Offset(0f, 0f)) }
 
     val isPointInSelection: (Offset) -> Boolean = { mmPoint: Offset ->
-        val isOnDevice = devicesInfo
-            .filter { it.key in selectedTags }
-            .any { it.value.containsPoint(mmPoint) }
-        val isOnVideo = videoTag in selectedTags && videoOnCanvas.containsPoint(mmPoint)
-
+        val selectedDevices = devices
+            .filter { it.watcherInfo in selectedDevicesWatcherInfo }
+        val isOnDevice = selectedDevices.any { it.containsPoint(mmPoint) }
+        val isOnVideo = isVideoSelected && video.containsPoint(mmPoint)
         isOnDevice || isOnVideo
     }
 
-    val tryMoveSelection = { mmOffset: Offset ->
-        val (selectedDevicesInfo, otherDevicesInfo) = devicesInfo.entries.partition {
-            it.key in selectedTags
-        }
-        val selectedDevices = selectedDevicesInfo.map { it.value }
-        val otherDevices = otherDevicesInfo.map { it.value }
-
-        val movedVersions = selectedDevices.map {
-            it.copy(
-                mmOffsetX = it.mmOffsetX + mmOffset.x,
-                mmOffsetY = it.mmOffsetY + mmOffset.y
-            )
-        }
-        if (movedVersions.none { it.isIntersectingAny(otherDevices) }) {
-            devicesInfo = devicesInfo.map { deviceInfo ->
-                val tag = deviceInfo.key
-                val device = deviceInfo.value
-                val newDevice = when (device in selectedDevices) {
-                    false -> device
-                    true -> {
-                        val indexInSelection = selectedDevices.indexOf(device)
-                        movedVersions[indexInSelection]
-                    }
-                }
-                tag to newDevice
-            }.toMap()
-            if (videoTag in selectedTags) {
-                videoOnCanvas = videoOnCanvas.copy(
-                    mmOffsetX = videoOnCanvas.mmOffsetX + mmOffset.x,
-                    mmOffsetY = videoOnCanvas.mmOffsetY + mmOffset.y
-                )
-            }
-        }
-    }
-
     val saveConfigAndCloseEditor = {
-        setFinalDevicePositionConfiguration(
-            FinalDevicePositionConfiguration(
-                videoOnCanvas = videoOnCanvas,
-                devicesOnCanvas = devicesInfo.map { WatcherTagAndDeviceOnCanvas(it.key, it.value) }
-            )
-        )
+        saveDevicePositions(DevicePositionsEditor(video, devices, camera))
         closeEditor()
     }
     Dialog(
@@ -340,73 +392,83 @@ fun DevicesPositionConfigurationEditor(
                 modifier = Modifier
                     .fillMaxSize()
                     .pointerInput(Unit) {
+                        val localPxToMm =
+                            { px: Float -> px * mmOfRealWidthEditorShouldFit / (pxEditorWidth * camera.zoom) }
                         detectTapGestures(
                             onTap = {
+                                truePointerPos = it
+                                Log.d("true pointer", "${it}")
                                 mmPointerOnEditor = Offset(
-                                    x = pxToMm(it.x / canvasCameraView.zoom) + canvasCameraView.mmViewOffsetX,
-                                    y = pxToMm(it.y / canvasCameraView.zoom) + canvasCameraView.mmViewOffsetY,
+                                    x = localPxToMm(it.x) + camera.mmViewOffsetX,
+                                    y = localPxToMm(it.y) + camera.mmViewOffsetY,
                                 )
-                                val selectedDeviceInfo = devicesInfo.entries.find { deviceInfo ->
-                                    val device = deviceInfo.value
+                                val selectedDevice = devices.find { device ->
                                     device.containsPoint(mmPointerOnEditor)
                                 }
-                                if (selectedDeviceInfo == null) {
-                                    val isPointerOnVideo = videoOnCanvas.containsPoint(mmPointerOnEditor)
-                                    if (!isPointerOnVideo) {
-                                        clearSelectedTags()
+                                if (selectedDevice != null) {
+                                    if (selectedDevice.watcherInfo in selectedDevicesWatcherInfo) {
+                                        removeDeviceFromSelection(selectedDevice)
+                                    } else {
+                                        addDeviceToSelection(selectedDevice)
                                     }
                                 } else {
-                                    val tag = selectedDeviceInfo.key
-                                    if (tag in selectedTags) {
-                                        removeTagFromSelection(tag)
-                                    } else {
-                                        addTagToSelection(tag)
+                                    if (!video.containsPoint(mmPointerOnEditor)) {
+                                        clearDeviceSelection() // user clicked elsewhere
                                     }
                                 }
 
                             },
                             onLongPress = {
                                 mmPointerOnEditor = Offset(
-                                    x = pxToMm(it.x / canvasCameraView.zoom) + canvasCameraView.mmViewOffsetX,
-                                    y = pxToMm(it.y / canvasCameraView.zoom) + canvasCameraView.mmViewOffsetY,
+                                    x = localPxToMm(it.x) + camera.mmViewOffsetX,
+                                    y = localPxToMm(it.y) + camera.mmViewOffsetY,
                                 )
-                                if (videoOnCanvas.containsPoint(mmPointerOnEditor)) {
-                                    if (videoTag in selectedTags) {
-                                        removeTagFromSelection(videoTag)
-                                    } else {
-                                        addTagToSelection(videoTag)
-                                    }
+                                if (video.containsPoint(mmPointerOnEditor)) {
+                                    isVideoSelected = !isVideoSelected
                                 }
                             }
                         )
                     }
                     .pointerInput(Unit) {
-                        detectTransformGestures { centroid, pan, zoom, rotation ->
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            val localPxToMm =
+                                { px: Float -> px * mmOfRealWidthEditorShouldFit / (pxEditorWidth * camera.zoom) }
                             truePointerPos = centroid
                             mmPointerOnEditor = Offset(
-                                x = pxToMm(centroid.x / canvasCameraView.zoom) + canvasCameraView.mmViewOffsetX,
-                                y = pxToMm(centroid.y / canvasCameraView.zoom) + canvasCameraView.mmViewOffsetY,
+                                x = localPxToMm(centroid.x) + camera.mmViewOffsetX,
+                                y = localPxToMm(centroid.y) + camera.mmViewOffsetY,
                             )
                             val mmPan = Offset(
-                                x = pxToMm(pan.x / canvasCameraView.zoom),
-                                y = pxToMm(pan.y / canvasCameraView.zoom)
+                                x = localPxToMm(pan.x),
+                                y = localPxToMm(pan.y)
                             )
-                            if (selectedTags.isNotEmpty()) {
-                                tryMoveSelection(mmPan)
-                                if (videoTag in selectedTags) {
-                                    videoOnCanvas = videoOnCanvas.zoomedBy(zoom, videoOnCanvas.mmCenter)
-                                }
-                            } else {
-                                canvasCameraView = canvasCameraView
+                            var nothingWasSelected = true
+                            if (selectedDevicesWatcherInfo.isNotEmpty()) {
+                                val selectedDevices = devices
+                                    .filter { it.watcherInfo in selectedDevicesWatcherInfo }
+                                devices = devices.withMovedDevices(selectedDevices, mmPan)
+                                nothingWasSelected = false
+                            }
+                            if (isVideoSelected) {
+                                video = video
+                                    .withAddedOffset(mmPan.x, mmPan.y)
+                                    .zoomedBy(zoom, video.mmCenter)
+                                nothingWasSelected = false
+                                mmPointerOnEditor = video.mmCenter
+                            }
+                            if (nothingWasSelected) {
+                                camera = camera
                                     .zoomedBy(zoom, mmPointerOnEditor)
                                     .withAddedOffset(-mmPan.x, -mmPan.y)
                             }
                         }
                     },
             ) {
-                val mmCameraPosX = canvasCameraView.mmViewOffsetX
-                val mmCameraPosY = canvasCameraView.mmViewOffsetY
-                videoOnCanvas.let {
+                val mmCameraPosX = camera.mmViewOffsetX
+                val mmCameraPosY = camera.mmViewOffsetY
+                val selectedDevices = devices
+                    .filter { it.watcherInfo in selectedDevicesWatcherInfo }
+                video.let {
                     drawRect(
                         color = Color.Black,
                         topLeft = Offset(
@@ -420,7 +482,7 @@ fun DevicesPositionConfigurationEditor(
                         alpha = 0.5f,
                         style = Fill,
                     )
-                    if (videoTag in selectedTags) {
+                    if (isVideoSelected) {
                         drawRect(
                             color = Color.Magenta,
                             topLeft = Offset(
@@ -436,34 +498,43 @@ fun DevicesPositionConfigurationEditor(
                         )
                     }
                 }
-                Log.d("tag", "approved count = ${approvedWatchers.count()}, devicesInfo count = ${devicesInfo.entries.count()}")
-                devicesInfo.forEach {
-                    val tag = it.key
-                    val device = it.value
-                    Log.d("tag", "tag: $tag, device info: $device")
+                devices.forEach {
                     drawRect(
-                        color = tag.color,
+                        color = Color(it.brushColor),
                         topLeft = Offset(
-                            x = mmToPx(device.mmOffsetX - mmCameraPosX),
-                            y = mmToPx(device.mmOffsetY - mmCameraPosY)
+                            x = mmToPx(it.mmOffsetX - mmCameraPosX),
+                            y = mmToPx(it.mmOffsetY - mmCameraPosY)
                         ),
                         size = Size(
-                            width = mmToPx(device.mmDeviceWidth),
-                            height = mmToPx(device.mmDeviceHeight)
+                            width = mmToPx(it.mmDeviceWidth),
+                            height = mmToPx(it.mmDeviceHeight)
                         ),
                         alpha = 0.5f,
                         style = Fill,
                     )
-                    if (tag in selectedTags) {
+                    drawRect(
+                        color = Color(it.brushColor),
+                        topLeft = Offset(
+                            x = mmToPx(it.displayLeft - mmCameraPosX),
+                            y = mmToPx(it.displayTop - mmCameraPosY)
+                        ),
+                        size = Size(
+                            width = mmToPx(it.mmDisplayWidth),
+                            height = mmToPx(it.mmDisplayHeight)
+                        ),
+                        alpha = 0.5f,
+                        style = Fill,
+                    )
+                    if (it in selectedDevices) {
                         drawRect(
                             color = Color.Magenta,
                             topLeft = Offset(
-                                x = mmToPx(device.mmOffsetX - mmCameraPosX),
-                                y = mmToPx(device.mmOffsetY - mmCameraPosY)
+                                x = mmToPx(it.mmOffsetX - mmCameraPosX),
+                                y = mmToPx(it.mmOffsetY - mmCameraPosY)
                             ),
                             size = Size(
-                                width = mmToPx(device.mmDeviceWidth),
-                                height = mmToPx(device.mmDeviceHeight)
+                                width = mmToPx(it.mmDeviceWidth),
+                                height = mmToPx(it.mmDeviceHeight)
                             ),
                             alpha = 0.5f,
                             style = Stroke(width = 4f),
@@ -471,8 +542,8 @@ fun DevicesPositionConfigurationEditor(
                     }
                 }
                 mmPointerOnEditor.let {
-                    val pointerWidth = mmToPx(25f / canvasCameraView.zoom)
-                    val pointerHeight = mmToPx(25f / canvasCameraView.zoom)
+                    val pointerWidth = mmToPx(25f / camera.zoom)
+                    val pointerHeight = mmToPx(25f / camera.zoom)
                     drawRect(
                         color = Color.Magenta,
                         topLeft = Offset(
@@ -487,25 +558,60 @@ fun DevicesPositionConfigurationEditor(
                         style = Fill,
                     )
                 }
-//                truePointerPos.let {
-//                    drawCircle(
-//                        color = Color.Magenta,
-//                        radius = 50f,
-//                        center = it,
-//                        alpha = 0.5f,
-//                        style = Fill,
-//                    )
-//                }
+                truePointerPos.let {
+                    drawCircle(
+                        color = Color.Magenta,
+                        radius = 50f,
+                        center = it,
+                        alpha = 0.5f,
+                        style = Fill,
+                    )
+                }
+                Offset(x=0f, y=pxEditorHeight/2).let { left ->
+                    drawCircle(
+                        color = Color.Green,
+                        radius = 50f,
+                        center = left,
+                        alpha = 0.5f,
+                        style = Fill,
+                    )
+                }
+                Offset(x=pxEditorWidth/2, y=pxEditorHeight/2).let { center ->
+                    drawCircle(
+                        color = Color.Green,
+                        radius = 50f,
+                        center = center,
+                        alpha = 0.5f,
+                        style = Fill,
+                    )
+                }
+                Offset(x=pxEditorWidth, y=pxEditorHeight/2).let { right ->
+                    drawCircle(
+                        color = Color.Green,
+                        radius = 50f,
+                        center = right,
+                        alpha = 0.5f,
+                        style = Fill,
+                    )
+                }
             }
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                val selectedTagsSnapshot = selectedTags
-                selectedTagsSnapshot.forEach { tag ->
+                if (isVideoSelected) {
+                    val resString = "${video.videoMetadata.width}x${video.videoMetadata.height}"
+                    val mmString = "${video.mmWidth}mm x ${video.mmHeight}mm"
                     Text(
                         modifier = Modifier.fillMaxWidth(),
                         textAlign = TextAlign.Center,
-                        text = "${tag.username} [${tag.endpointId}]",
+                        text = "${video.videoMetadata.filename} [$resString] [$mmString]",
+                    )
+                }
+                selectedDevicesWatcherInfo.forEach { watcherInfo ->
+                    Text(
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center,
+                        text = "${watcherInfo.username} [${watcherInfo.endpointId}]",
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -533,25 +639,29 @@ fun DevicesPositionConfigurationEditor(
                         .alpha(0.5f)
                         .background(Color.White)
                 ) {
-                    val mmCenter = with(LocalDensity.current) {
-                        Offset(
-                            x = pxToMm(editorWidth.toPx() / 2) - canvasCameraView.mmViewOffsetX,
-                            y = pxToMm(editorHeight.toPx() / 2) - canvasCameraView.mmViewOffsetY
-                        )
-                    }
+                    val mmCenter = Offset(
+                        x = pxToMm(pxEditorWidth / 2) + camera.mmViewOffsetX,
+                        y = pxToMm(pxEditorHeight / 2) + camera.mmViewOffsetY
+                    )
+                    val zoomSteps = remember { Steps(listOf(
+                        0.5f, 0.6f, 0.7f, 0.8f, 0.9f,
+                        1.0f,
+                        1.2f, 1.4f, 1.6f, 1.8f, 2.0f
+                    )) }
                     Text(
                         text = "+",
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier
                             .clickable {
-                                canvasCameraView = canvasCameraView.zoomedTo(
-                                    targetZoom = canvasCameraView.zoom + 0.1f,
+                                mmPointerOnEditor = mmCenter
+                                camera = camera.zoomedTo(
+                                    targetZoom = zoomSteps.nextToClosestStep(camera.zoom),
                                     mmPivotPoint = mmCenter
                                 )
                             }
                     )
                     Text(
-                        text = String.format("%.1f", canvasCameraView.zoom),
+                        text = String.format("%.1f", camera.zoom),
                         modifier = Modifier
                     )
                     Text(
@@ -559,8 +669,9 @@ fun DevicesPositionConfigurationEditor(
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier
                             .clickable {
-                                canvasCameraView = canvasCameraView.zoomedTo(
-                                    targetZoom = canvasCameraView.zoom - 0.1f,
+                                mmPointerOnEditor = mmCenter
+                                camera = camera.zoomedTo(
+                                    targetZoom = zoomSteps.prevToClosestStep(camera.zoom),
                                     mmPivotPoint = mmCenter
                                 )
                             }
@@ -571,143 +682,62 @@ fun DevicesPositionConfigurationEditor(
     }
 }
 
-data class CanvasCameraView(
-    val mmViewOffsetX: Float,
-    val mmViewOffsetY: Float,
-    val zoom: Float
-) {
-    fun withAddedOffset(x: Float, y: Float): CanvasCameraView {
-        return copy(
-            mmViewOffsetX = mmViewOffsetX + x,
-            mmViewOffsetY = mmViewOffsetY + y
-        )
-    }
-
-    fun zoomedBy(zoomMultiplier: Float, mmPivotPoint: Offset): CanvasCameraView {
-        return zoomedTo(
-            targetZoom = zoom * zoomMultiplier,
-            mmPivotPoint = mmPivotPoint
-        )
-    }
-
-    fun zoomedTo(targetZoom: Float, mmPivotPoint: Offset): CanvasCameraView {
-        val newZoom = targetZoom.coerceIn(MIN_ZOOM, MAX_ZOOM)
-        val zoomMultiplier = newZoom / zoom
-        val cameraTopLeft = Offset(x = mmViewOffsetX, y = mmViewOffsetY)
-        val offsetChange = (mmPivotPoint - cameraTopLeft) * ((zoomMultiplier - 1) / zoomMultiplier)
-        return copy(
-            mmViewOffsetX = mmViewOffsetX + offsetChange.x,
-            mmViewOffsetY = mmViewOffsetY + offsetChange.y,
-            zoom = zoom * zoomMultiplier
-        )
-    }
-
-    companion object {
-        const val MAX_ZOOM = 2f
-        const val MIN_ZOOM = 0.5f
-    }
-}
-
-@Serializable
-data class VideoOnCanvas(
-    val mmOffsetX: Float,
-    val mmOffsetY: Float,
-    val mmWidth: Float,
-    val mmHeight: Float,
-) {
-    val mmLeft
-        get() = mmOffsetX
-    val mmRight
-        get() = mmLeft + mmWidth
-    val mmTop
-        get() = mmOffsetY
-    val mmBottom
-        get() = mmTop + mmHeight
-    val mmCenter
-        get() = Offset(x = mmOffsetX + mmWidth / 2, y = mmOffsetY + mmHeight / 2)
-
-    fun zoomedBy(zoomMultiplier: Float, mmPivotPoint: Offset): VideoOnCanvas {
-        if (zoomMultiplier == 1f) return this
-        val videoTopLeft = Offset(x = mmOffsetX, y = mmOffsetY)
-        val offsetChange = (mmPivotPoint - videoTopLeft) * ((zoomMultiplier - 1) / zoomMultiplier)
-        return copy(
-            mmOffsetX = mmOffsetX + offsetChange.x,
-            mmOffsetY = mmOffsetY + offsetChange.y,
-            mmWidth = mmWidth * zoomMultiplier,
-            mmHeight = mmHeight * zoomMultiplier,
-        )
-    }
-}
-
-@Serializable
-data class FinalDevicePositionConfiguration(
-    val videoOnCanvas: VideoOnCanvas,
-    val devicesOnCanvas: List<WatcherTagAndDeviceOnCanvas>
-)
-
-@Serializable
-data class WatcherTagAndDeviceOnCanvas(
-    val watcherTag: WatcherTag,
-    val deviceOnCanvas: DeviceOnCanvas
-)
-
-@Serializable
-data class DeviceOnCanvas(
-    val mmOffsetX: Float,
-    val mmOffsetY: Float,
-    val mmDisplayWidth: Float,
-    val mmDisplayHeight: Float,
-    val mmDeviceWidth: Float,
-    val mmDeviceHeight: Float,
-) {
-    val mmLeft
-        get() = mmOffsetX
-    val mmRight
-        get() = mmLeft + mmDeviceWidth
-    val mmTop
-        get() = mmOffsetY
-    val mmBottom
-        get() = mmTop + mmDeviceHeight
-}
-
-@Serializable
-data class WatcherTag(
-    val username: String,
-    val endpointId: String,
-    val colorValue: Long = Color.Red.toArgb().toLong(),
-    val physicalDevice: VisyncPhysicalDevice,
-) {
-    val color
-        get() = Color(colorValue)
-}
-
 private fun getUsername(context: Context): String? {
     val profilePrefs = getProfilePreferences(context)
     val usernameKey = context.getString(R.string.prefs_profile_username)
     return profilePrefs.getString(usernameKey, null)
 }
 
-fun VideoOnCanvas.containsPoint(point: Offset): Boolean {
-    return  point.x > mmLeft &&
-            point.x < mmRight &&
-            point.y > mmTop &&
-            point.y < mmBottom
+private fun List<DeviceOnEditor>.withMovedDevices(
+    devices: List<DeviceOnEditor>,
+    offset: Offset
+): List<DeviceOnEditor> {
+    val (selectedDevices, otherDevices) = this.partition { it in devices }
+    val movedVersions = selectedDevices.map {
+        it.copy(
+            mmOffsetX = it.mmOffsetX + offset.x,
+            mmOffsetY = it.mmOffsetY + offset.y
+        )
+    }
+    if (movedVersions.any { it.isIntersectingAny(otherDevices) }) {
+        return this
+    }
+    return this.toMutableList().apply {
+        forEachIndexed { index, device ->
+            if (device in selectedDevices) {
+                val indexInSelection = selectedDevices.indexOf(device)
+                this[index] = movedVersions[indexInSelection]
+            }
+        }
+    }
 }
 
-fun DeviceOnCanvas.containsPoint(point: Offset): Boolean {
-    return  point.x > mmLeft &&
-            point.x < mmRight &&
-            point.y > mmTop &&
-            point.y < mmBottom
-}
+class Steps(
+    val stepList: List<Float>
+) {
+    init {
+        if (stepList.isEmpty()) { throw IllegalArgumentException() }
+    }
+    private val minIndex = 0
+    private val maxIndex = stepList.count() - 1
+    var currentIndex = 0
+        private set
+    val currentValue
+        get() = stepList[currentIndex]
 
-fun DeviceOnCanvas.isIntersecting(other: DeviceOnCanvas): Boolean {
-    return  mmLeft <= other.mmRight &&
-            mmRight >= other.mmLeft &&
-            mmTop <= other.mmBottom &&
-            mmBottom >= other.mmTop
-}
+    fun nextToClosestStep(value: Float): Float {
+        currentIndex = stepList.withIndex()
+            .minBy { (value - it.value).absoluteValue }
+            .index.plus(1)
+            .coerceAtMost(maxIndex)
+        return currentValue
+    }
 
-fun DeviceOnCanvas.isIntersectingAny(others: List<DeviceOnCanvas>): Boolean {
-    return others.any { this.isIntersecting(it) }
+    fun prevToClosestStep(value: Float): Float {
+        currentIndex = stepList.withIndex()
+            .minBy { (value - it.value).absoluteValue }
+            .index.minus(1)
+            .coerceAtLeast(minIndex)
+        return currentValue
+    }
 }

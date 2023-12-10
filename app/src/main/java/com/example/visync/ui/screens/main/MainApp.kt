@@ -8,18 +8,25 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -39,11 +46,18 @@ import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -56,10 +70,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.visync.connections.RunningConnection
 import com.example.visync.connections.VisyncNearbyConnections
-import com.example.visync.connections.VisyncNearbyConnectionsListener
+import com.example.visync.connections.EmptyVisyncNearbyConnectionsListener
+import com.example.visync.connections.VisyncNearbyConnectionsConfiguration
 import com.example.visync.data.videofiles.Videofile
 import com.example.visync.messaging.JsonVisyncMessageConverter
 import com.example.visync.messaging.OpenPlayerMessage
+import com.example.visync.messaging.SyncBallMessage
 import com.example.visync.messaging.TextMessage
 import com.example.visync.player.PlayerWrapperPlaybackControls
 import com.example.visync.ui.PlaybackSetupOutput
@@ -67,13 +83,21 @@ import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.MainAppNavigation
 import com.example.visync.ui.components.navigation.NavigationType
-import com.example.visync.ui.getPlayerMessageSender
-import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupOptionSetters
-import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupScreen
+import com.example.visync.ui.components.navigation.SynchronizeScrolls
+import com.example.visync.ui.screens.main.playback_setup.DevicePositionsEditor
+import com.example.visync.ui.screens.main.playback_setup.EmptyGuestMessageCallbacks
+import com.example.visync.ui.screens.main.playback_setup.EmptyGuestSpecificCallbacks
+import com.example.visync.ui.screens.main.playback_setup.EmptyHostSpecificCallbacks
+import com.example.visync.ui.screens.main.playback_setup.EmptyPlaybackSetupCallbacks
+import com.example.visync.ui.screens.main.playback_setup.EndpointInfo
+import com.example.visync.ui.screens.main.playback_setup.GuestConnectionStatus
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupGuestScreen
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupHostScreen
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupUserState
 import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupViewModel
-import com.example.visync.ui.screens.main.playback_setup.SetupMode
+import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupViewModelConfiguration
 import com.example.visync.ui.screens.main.rooms.RoomsScreen
-import com.example.visync.ui.screens.main.rooms.RoomsScreenViewModel
+import com.example.visync.ui.screens.player.VideoConfiguration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -82,6 +106,8 @@ import javax.inject.Inject
 @Composable
 fun MainApp(
     windowSize: WindowSizeClass,
+    isDarkTheme: Boolean,
+    setDarkTheme: (Boolean) -> Unit,
     mainAppUiState: MainAppUiState,
     mainAppNavigationUiState: MainAppNavigationUiState,
     play: (PlaybackStartOptions, PlaybackSetupOutput) -> Unit,
@@ -113,59 +139,66 @@ fun MainApp(
     }
 
     val playbackSetupViewModel = hiltViewModel<PlaybackSetupViewModel>()
-    val playbackSetupState by playbackSetupViewModel
-        .playbackSetupState.collectAsStateWithLifecycle()
-    val playbackSetupConnections = playbackSetupViewModel.visyncNearbyConnections
-    val connectionsState by playbackSetupConnections
-        .connectionsState.collectAsStateWithLifecycle()
-    playbackSetupViewModel.initializePhysicalDevice(
-        mainAppNavigationUiState.editablePhysicalDevice.value
-    )
+    if (!playbackSetupViewModel.isInitialized) {
+        val username = mainAppNavigationUiState.editableUsername.value
+        val device = mainAppNavigationUiState.editablePhysicalDevice.value
+        playbackSetupViewModel.initialize(
+            config = PlaybackSetupViewModelConfiguration(
+                username = username,
+                device = device,
+                commonPlaybackSetupCallbacks = EmptyPlaybackSetupCallbacks(),
+                hostSpecificCallbacks = EmptyHostSpecificCallbacks(),
+                guestSpecificCallbacks = object : EmptyGuestSpecificCallbacks() {
+                    override fun onSyncBallMessage(sender: EndpointInfo, message: SyncBallMessage) {
+                        Log.d("Test", "syncball received")
+                    }
+
+                    override val messages = object : EmptyGuestMessageCallbacks() {
+                        override fun onOpenPlayerMessage() {
+                            val guestPlaybackSetupState = playbackSetupViewModel.guestPlaybackSetupState.value
+                            val playbackSetupOptions = guestPlaybackSetupState.playbackOptions
+                            play(
+                                PlaybackStartOptions(
+                                    videofiles = guestPlaybackSetupState.localSelectedVideofiles,
+                                    startFrom = playbackSetupOptions.selectedVideofileIndex,
+                                    playbackSpeed = playbackSetupOptions.playbackSpeed
+                                ),
+                                PlaybackSetupOutput(
+                                    videoConfiguration = devicePositionConfigurationToVideoConfiguration(
+                                        targetEndpointId = guestPlaybackSetupState.watchers.first().endpointId,
+                                        config = playbackSetupViewModel.guestDevicePositions.value!!
+                                    ),
+                                    isUserHost = false,
+                                    resetAllConnections = { playbackSetupViewModel.currentState = PlaybackSetupUserState.IDLE },
+                                )
+                            )
+                        }
+                    }
+                }
+            )
+        )
+    }
+    val hostPlaybackSetupState by playbackSetupViewModel
+        .hostPlaybackSetupState.collectAsStateWithLifecycle()
+    val hostDevicePositionsState by playbackSetupViewModel
+        .hostDevicePositions.collectAsStateWithLifecycle()
+    val hostConnectionState by playbackSetupViewModel
+        .hostConnectionState.collectAsStateWithLifecycle()
+
+    val guestPlaybackSetupState by playbackSetupViewModel
+        .guestPlaybackSetupState.collectAsStateWithLifecycle()
+    val guestDevicePositionsState by playbackSetupViewModel
+        .guestDevicePositions.collectAsStateWithLifecycle()
+    val guestConnectionState by playbackSetupViewModel
+        .guestConnectionState.collectAsStateWithLifecycle()
+
 
     val navController = rememberNavController()
     val navActions = VisyncNavigationActions(navController)
 
-    val playbackSetupOptionSetters = remember {
-        PlaybackSetupOptionSetters(
-            setSelectedVideofiles = { videofiles ->
-                playbackSetupViewModel.setVideofilesAndNotifyIfHost(
-                    videofiles = videofiles,
-                    startFrom = 0
-                )
-            },
-            addToSelectedVideofiles = { videofiles ->
-                playbackSetupViewModel.addVideofilesAndNotifyIfHost(
-                    videofiles = videofiles
-                )
-            },
-            setSelectedFileIndex = { index ->
-                val currentVideofiles = playbackSetupState.selectedVideofiles
-                playbackSetupViewModel.setVideofilesAndNotifyIfHost(
-                    videofiles = currentVideofiles,
-                    startFrom = index
-                )
-            },
-            setDoStream = { doStream ->
-                playbackSetupViewModel.setDoStream(doStream)
-            },
-            setPlaybackSpeed = { playbackSpeed ->
-                playbackSetupViewModel.setPlaybackSpeed(playbackSpeed)
-            },
-            toggleRepeatMode = {
-                val repeatMode = playbackSetupState.playbackSetupOptions.repeatMode
-                val newRepeatMode = (repeatMode + 1) % 3
-                playbackSetupViewModel.setRepeatMode(newRepeatMode)
-            }
-        )
-    }
-    val messageSender = remember {
-        getPlayerMessageSender(
-            playbackSetupViewModel = playbackSetupViewModel,
-            playbackSetupConnections = playbackSetupConnections
-        )
-    }
-
     MainAppNavigation(
+        isDarkTheme = isDarkTheme,
+        setDarkTheme = setDarkTheme,
         uiState = mainAppNavigationUiState,
         navigationType = navigationType,
         navController = navController
@@ -176,157 +209,206 @@ fun MainApp(
             modifier = Modifier.fillMaxSize(),
         ) {
             composable(Route.PlaybackSetup.routeString) {
-                val username = mainAppNavigationUiState.editableUsername.value
-                val context = LocalContext.current
+                val currentRole = playbackSetupViewModel.currentState
 
-                val isInGuestMode = playbackSetupState.setupMode == SetupMode.GUEST
-                val isConnected = connectionsState.runningConnections.isNotEmpty()
+                val notInHostMode = currentRole != PlaybackSetupUserState.HOST
+                val isInGuestMode = currentRole == PlaybackSetupUserState.GUEST
+                val isConnected = hostConnectionState.allWatcherPings.isNotEmpty() // TODO
                 val showConfirmTransitionToHostDialog = isInGuestMode && isConnected
-                val transitionToHost = {
-                    playbackSetupViewModel.fullResetToHostMode()
-                    playbackSetupViewModel.resetMessageEvents()
+                val transitionToHostRole = {
+                    playbackSetupViewModel.currentState = PlaybackSetupUserState.HOST
                 }
                 if (showConfirmTransitionToHostDialog) {
                     AlertOngoingGuestSetup(
-                        onCancel = { navActions.back() },
-                        onConfirm = { transitionToHost() }
+                        onCancel = {
+                            navActions.back()
+                        },
+                        onConfirm = {
+                            transitionToHostRole()
+                        }
                     )
                     return@composable
-                } else if (isInGuestMode) {
-                    transitionToHost()
                 }
-                PlaybackSetupScreen(
-                    playbackSetupState = playbackSetupState,
-                    approveWatcher = playbackSetupViewModel::approveWatcher,
-                    disapproveWatcher = playbackSetupViewModel::disapproveWatcher,
-                    playbackSetupOptionSetters = playbackSetupOptionSetters,
-                    startAdvertising =  {
-                        playbackSetupConnections.startAdvertising(username, context)
-                    },
-                    setFinalDevicePositionConfiguration = playbackSetupViewModel::setFinalDevicePositionConfiguration,
+                LaunchedEffect(Unit) {
+                    if (notInHostMode) {
+                        transitionToHostRole()
+                    }
+                }
+                DisposableEffect(Unit) {
+                    onDispose {
+                        playbackSetupViewModel.hostActions.stopAdvertisingRoom()
+                    }
+                }
+                PlaybackSetupHostScreen(
+                    playbackSetupState = hostPlaybackSetupState,
+                    hostConnectionState = hostConnectionState,
+                    hostActions = playbackSetupViewModel.hostActions,
+                    positionsEditor = hostDevicePositionsState,
+                    setSelectedVideofiles = playbackSetupViewModel::setSelectedVideofiles,
                     play = {
-                        val playbackSetupOptions = playbackSetupState.playbackSetupOptions
-                        playbackSetupViewModel.sendOpenPlayer()
+                        val playbackSetupOptions = hostPlaybackSetupState.playbackOptions
+                        playbackSetupViewModel.hostActions.sendOpenPlayer()
                         play(
                             PlaybackStartOptions(
-                                videofiles = playbackSetupState.selectedVideofiles,
+                                videofiles = hostPlaybackSetupState.localSelectedVideofiles,
                                 startFrom = playbackSetupOptions.selectedVideofileIndex,
                                 playbackSpeed = playbackSetupOptions.playbackSpeed
                             ),
                             PlaybackSetupOutput(
-                                videoConfiguration = playbackSetupViewModel.devicePositionConfigurationToVideoConfiguration(
-                                    targetEndpointId = playbackSetupState.meAsWatcher.endpointId,
-                                    config = playbackSetupViewModel.finalDevicePositionConfiguration!!
+                                videoConfiguration = devicePositionConfigurationToVideoConfiguration(
+                                    targetEndpointId = hostPlaybackSetupState.watchers.first().endpointId,
+                                    config = hostDevicePositionsState!!
                                 ),
                                 isUserHost = true,
-                                resetAllConnections = playbackSetupConnections::reset,
-                                messageSender = messageSender
+                                resetAllConnections = { playbackSetupViewModel.currentState = PlaybackSetupUserState.IDLE },
                             )
                         )
-                        playbackSetupConnections.stopAdvertising()
+                        playbackSetupViewModel.hostActions.stopAdvertisingRoom()
+                        playbackSetupViewModel.hostActions.stopPinging()
                    },
                 )
             }
             composable(Route.RoomsJoin.routeString) {
-                val roomsScreenViewModel = hiltViewModel<RoomsScreenViewModel>()
-                val roomsUiState by roomsScreenViewModel
-                    .uiState.collectAsStateWithLifecycle()
+                val currentRole = playbackSetupViewModel.currentState
 
-                val showConfirmDiscoveryDialog = remember { mutableStateOf(false) }
+                val guestActions = playbackSetupViewModel.guestActions
 
-                val username = mainAppNavigationUiState.editableUsername.value
-                val context = LocalContext.current
-                val transitionToGuestModeAndDiscover = {
-                    playbackSetupViewModel.fullResetToGuestMode()
-                    playbackSetupConnections.startDiscovering(username, context)
-                    playbackSetupViewModel.messageEvents.apply {
-                        onOpenPlayerMessage = {
-                            val playbackSetupOptions = playbackSetupState.playbackSetupOptions
-                            play(
-                                PlaybackStartOptions(
-                                    videofiles = playbackSetupState.selectedVideofiles,
-                                    startFrom = playbackSetupOptions.selectedVideofileIndex,
-                                    playbackSpeed = playbackSetupOptions.playbackSpeed
-                                ),
-                                PlaybackSetupOutput(
-                                    videoConfiguration = playbackSetupViewModel.devicePositionConfigurationToVideoConfiguration(
-                                        targetEndpointId = playbackSetupState.meAsWatcher.endpointId,
-                                        config = playbackSetupViewModel.finalDevicePositionConfiguration!!
-                                    ),
-                                    isUserHost = false,
-                                    resetAllConnections = playbackSetupConnections::reset,
-                                    messageSender = messageSender
-                                )
-                            )
-                        }
-                        onPauseUnpauseMessage = { message ->
-                            when (message.doPause) {
-                                true -> { playbackControls.pause() }
-                                false -> { playbackControls.unpause() }
-                            }
-                        }
-                    }
+                val transitionToGuestRole = {
+                    playbackSetupViewModel.currentState = PlaybackSetupUserState.GUEST
                 }
-                if (showConfirmDiscoveryDialog.value) {
+
+                val showConfirmDiscoveryDialog = (
+                    currentRole == PlaybackSetupUserState.HOST &&
+                    hostConnectionState.hasConnections
+                )
+                if (showConfirmDiscoveryDialog) {
                     AlertOngoingHostSetup(
                         onCancel = {
-                            showConfirmDiscoveryDialog.value = false
+                            navActions.back()
                         },
                         onConfirm = {
-                            transitionToGuestModeAndDiscover()
-                            showConfirmDiscoveryDialog.value = false
+                            transitionToGuestRole()
                         }
                     )
+                    return@composable
                 }
-
-                val isInGuestMode = playbackSetupState.setupMode == SetupMode.GUEST
-                val isConnected = connectionsState.runningConnections.isNotEmpty()
-                if (isInGuestMode && isConnected) {
-                    PlaybackSetupScreen(
-                        playbackSetupState = playbackSetupState,
-                        setSelectedVideofilesAsGuest = playbackSetupViewModel::setVideofilesAsGuest,
-                        setFinalDevicePositionConfiguration = playbackSetupViewModel::setFinalDevicePositionConfiguration,
-                    )
-                } else {
-                    DisposableEffect(Unit) {
-                        onDispose {
-                            playbackSetupConnections.stopDiscovering()
-                            roomsScreenViewModel.clearDiscoveredRooms()
-                        }
+                LaunchedEffect(Unit) {
+                    if (currentRole != PlaybackSetupUserState.GUEST) {
+                        transitionToGuestRole()
                     }
-
-                    if (!connectionsState.isDiscovering) {
+                }
+                DisposableEffect(Unit) {
+                    onDispose {
+                        playbackSetupViewModel.guestActions.stopDiscoveringRooms()
+                        playbackSetupViewModel.guestActions.stopPonging()
+                    }
+                }
+                when (guestConnectionState.connectionStatus) {
+                    GuestConnectionStatus.IDLE -> {
                         IconButton(
-                            onClick = {
-                                val isInHostMode = playbackSetupState.setupMode == SetupMode.HOST
-                                val hasConnections = connectionsState.let {
-                                    (it.connectionRequests + it.runningConnections).isNotEmpty()
-                                }
-                                if (isInHostMode && hasConnections) {
-                                    showConfirmDiscoveryDialog.value = true
-                                } else {
-                                    transitionToGuestModeAndDiscover()
-                                }
-                            }
+                            onClick = guestActions::startDiscoveringRooms
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
                                 contentDescription = "start discovering"
                             )
                         }
+                        RoomsScreen(
+                            rooms = guestConnectionState.discoveredRooms
+                        )
                     }
-                    RoomsScreen(
-                        roomsUiState = roomsUiState,
-                        joinRoom = {
-                            playbackSetupConnections.stopDiscovering()
-                            it.initiateConnection()
+                    GuestConnectionStatus.DISCOVERING -> {
+                        IconButton(
+                            onClick = guestActions::stopDiscoveringRooms
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = "start discovering"
+                            )
                         }
-                    )
+                        RoomsScreen(
+                            rooms = guestConnectionState.discoveredRooms
+                        )
+                    }
+                    GuestConnectionStatus.CONNECTING -> {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("Connecting...")
+                        }
+                        return@composable
+                    }
+                    GuestConnectionStatus.CONNECTED -> {
+                        PlaybackSetupGuestScreen(
+                            playbackSetupState = guestPlaybackSetupState,
+                            devicePositionsState = guestDevicePositionsState,
+                            guestActions = playbackSetupViewModel.guestActions,
+                            setSelectedVideofiles = playbackSetupViewModel::setSelectedVideofiles,
+                        )
+                    }
+                    GuestConnectionStatus.CONNECTION_ERROR -> {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("Connection error")
+                        }
+                        return@composable
+                    }
+                    GuestConnectionStatus.DISCONNECTED -> {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("Connection was lost")
+                        }
+                        return@composable
+                    }
                 }
             }
             composable(Route.MyProfile.routeString) {
                 Column {
+                    Spacer(modifier = Modifier.size(64.dp))
+                    Row(modifier = Modifier
+                        .background(Color.Gray)
+                        .height(200.dp)) {
+                        Spacer(modifier = Modifier.size(64.dp))
 
+                        val coroutineScope = rememberCoroutineScope()
+                        val scrollState1 = rememberScrollState()
+                        val scrollState2 = rememberScrollState()
+                        val initialOffset by remember { mutableFloatStateOf(0f) }
+                        val delta by remember { mutableFloatStateOf(0f) }
+                        val prevScroll1 by remember { mutableIntStateOf(scrollState1.value) }
+                        val prevScroll2 by remember { mutableIntStateOf(scrollState2.value) }
+                        SynchronizeScrolls(scrollState1, scrollState2)
+                        Column(modifier = Modifier.width(100.dp)) {
+                            Text("%6.2f".format(initialOffset))
+                            Text("%6.2f".format(delta))
+                            Row {
+                                Text(prevScroll1.toString())
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(scrollState1.value.toString())
+                            }
+                            Row {
+                                Text(prevScroll2.toString())
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(scrollState2.value.toString())
+                            }
+                        }
+                        Column(modifier = Modifier
+                            .background(Color.Green)
+                            .width(40.dp)
+                            .height(40.dp)
+                            .verticalScroll(scrollState1)
+                        ) {
+                            for (i in 0..19) {
+                                Text(i.toString())
+                            }
+                        }
+                        Column(modifier = Modifier
+                            .background(Color.Cyan)
+                            .width(40.dp)
+                            .height(100.dp)
+                            .verticalScroll(scrollState2)
+                        ) {
+                            for (i in 0..39) {
+                                Text(i.toString())
+                            }
+                        }
+                    }
                 }
             }
             composable(Route.Friends.routeString) {
@@ -412,11 +494,17 @@ fun MainApp(
             }
             composable("testNearbyConnections") {
                 val context = LocalContext.current
+                val username = mainAppNavigationUiState.editableUsername.value
                 val communicationTestViewModel = hiltViewModel<CommunicationTestViewModel>()
                 val connectionsWrapper = communicationTestViewModel.visyncNearbyConnections
+                connectionsWrapper.initialize(
+                    VisyncNearbyConnectionsConfiguration(
+                        username = username
+                    )
+                )
                 val messages = rememberSaveable { mutableStateOf(listOf<String>()) }
                 val messageConverter = remember { JsonVisyncMessageConverter() }
-                connectionsWrapper.setEventListener(object : VisyncNearbyConnectionsListener() {
+                val listener = remember { object : EmptyVisyncNearbyConnectionsListener() {
                     override fun onNewMessage(message: String, from: RunningConnection) {
                         val fullMessage = messageConverter.decode(message)
                         if (fullMessage is OpenPlayerMessage) {
@@ -428,24 +516,25 @@ fun MainApp(
                         }
                         messages.value += "${from.username}: $message"
                     }
-                })
+                } }
+                connectionsWrapper.removeEventListener(listener)
+                connectionsWrapper.addEventListener(listener)
                 val nearbyConnectionsState by connectionsWrapper
                     .connectionsState.collectAsStateWithLifecycle()
-                val username = mainAppNavigationUiState.editableUsername.value
                 DisposableEffect(Unit) {
                     onDispose {
-                        connectionsWrapper.reset()
+                        connectionsWrapper.resetToIdle()
                     }
                 }
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Text("current status = ${nearbyConnectionsState.status}")
+                    Text("current status = ${nearbyConnectionsState.broadcastingState}")
                     Row(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row {
                             IconButton(
-                                onClick = { connectionsWrapper.startAdvertising(username, context) }
+                                onClick = { connectionsWrapper.startAdvertising() }
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
@@ -472,7 +561,7 @@ fun MainApp(
                     ) {
                         Row {
                             IconButton(
-                                onClick = { connectionsWrapper.startDiscovering(username, context) }
+                                onClick = { connectionsWrapper.startDiscovering() }
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
@@ -693,4 +782,29 @@ class CommunicationTestViewModel @Inject constructor(
     val visyncNearbyConnections: VisyncNearbyConnections,
 ) : ViewModel() {
 
+}
+
+fun devicePositionConfigurationToVideoConfiguration(
+    targetEndpointId: String,
+    config: DevicePositionsEditor
+): VideoConfiguration {
+    val video = config.videoOnEditor
+    val devices = config.devicesOnEditor
+    val targetDeviceInfo = devices.find { it.watcherInfo.endpointId == targetEndpointId }
+    targetDeviceInfo ?: throw IllegalArgumentException("EndpointId was not found in the config")
+    val result = VideoConfiguration(
+        mmVideoWidth = video.mmWidth,
+        mmVideoHeight = video.mmHeight,
+        mmDevicePositionX = targetDeviceInfo.displayLeft - video.mmOffsetX,
+        mmDevicePositionY = targetDeviceInfo.displayTop - video.mmOffsetY
+    )
+    Log.d("video info", video.toString())
+    Log.d("target device info", targetDeviceInfo.toString())
+    Log.d("device config editor to video config", result.toString())
+    return VideoConfiguration(
+        mmVideoWidth = video.mmWidth,
+        mmVideoHeight = video.mmHeight,
+        mmDevicePositionX = targetDeviceInfo.displayLeft - video.mmOffsetX,
+        mmDevicePositionY = targetDeviceInfo.displayTop - video.mmOffsetY
+    )
 }

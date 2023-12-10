@@ -24,8 +24,9 @@ object ConnectionsModule {
     @Singleton
     @Provides
     fun provideVisyncNearbyConnections(
-        connectionsClient: ConnectionsClient
+        connectionsClient: ConnectionsClient,
+        app: Application,
     ): VisyncNearbyConnections {
-        return VisyncNearbyConnectionsImpl(connectionsClient)
+        return VisyncNearbyConnectionsImpl(connectionsClient, app)
     }
 }

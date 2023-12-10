@@ -38,7 +38,11 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
 
     private var _broadcastingState
         get() = _connectionsState.value.broadcastingState
-        set(value) = _connectionsState.update { it.copy(broadcastingState = value) }
+        set(value) {
+            if (value == _broadcastingState) { return }
+            _connectionsState.update { it.copy(broadcastingState = value) }
+            eventListeners.forEach { it.onBroadcastingStateChanged(value) }
+        }
     private var _discoveredEndpoints
         get() = _connectionsState.value.discoveredEndpoints
         set(value) = _connectionsState.update { it.copy(discoveredEndpoints = value) }
@@ -49,8 +53,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
         get() = _connectionsState.value.runningConnections
         set(value) = _connectionsState.update { it.copy(runningConnections = value) }
 
-    val emptyEventListener = EmptyVisyncNearbyConnectionsListener()
-    override var eventListener: VisyncNearbyConnectionsListener = emptyEventListener
+    private var eventListeners: MutableList<VisyncNearbyConnectionsListener> = mutableListOf()
 
     private var _stopAdvertising: (() -> Unit)? = null
     private var _stopDiscovering: (() -> Unit)? = null
@@ -122,6 +125,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             )
             .addOnSuccessListener {
                 logD("Started discovering")
+                _discoveredEndpoints = emptyList()
                 _broadcastingState = BroadcastingState.DISCOVERING
                 _stopDiscovering = {
                     _connectionsClient.stopDiscovery()
@@ -179,11 +183,42 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             }
     }
 
+    override fun tryInitiateConnection(
+        endpointId: String,
+        onTaskFailure: (Exception) -> Unit,
+        onTaskSuccess: () -> Unit,
+    ) {
+        val currentConfig = _config ?: throw Exception("No configuration found")
+        logD("Trying to connect directly through Endpoint ID to $endpointId")
+        _connectionsClient
+            .requestConnection(
+                currentConfig.username,
+                endpointId,
+                connectionLifecycleCallback
+            )
+            .addOnSuccessListener {
+                logD("Successfully sent direct connection request to $endpointId")
+                onTaskSuccess()
+            }
+            .addOnFailureListener { exception ->
+                logE("Failed to send direct connection request to $endpointId", exception)
+                onTaskFailure(exception)
+            }
+    }
+
     override fun resetToIdle() {
         stopAdvertising()
         stopDiscovering()
         _connectionsClient.stopAllEndpoints()
         _connectionsState.value = defaultConnectionsState
+    }
+
+    override fun addEventListener(listener: VisyncNearbyConnectionsListener) {
+        eventListeners += listener
+    }
+
+    override fun removeEventListener(listener: VisyncNearbyConnectionsListener) {
+        eventListeners -= listener
     }
 
     private fun addDiscoveredEndpoint(
@@ -195,7 +230,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             endpointInfo = endpointInfo,
         )
         _discoveredEndpoints = _discoveredEndpoints + discoveredEndpoint
-        eventListener.onNewDiscoveredEndpoint(discoveredEndpoint)
+        eventListeners.forEach { it.onNewDiscoveredEndpoint(discoveredEndpoint) }
     }
 
     private fun removeDiscoveredEndpoint(endpointId: String) {
@@ -212,7 +247,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             connectionInfo = connectionInfo,
         )
         _connectionRequests = _connectionRequests + connectionRequest
-        eventListener.onNewConnectionRequest(connectionRequest)
+        eventListeners.forEach { it.onNewConnectionRequest(connectionRequest) }
     }
 
     private fun removeConnectionRequest(endpointId: String) {
@@ -229,7 +264,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             username = username
         )
         _runningConnections = _runningConnections + runningConnection
-        eventListener.onNewRunningConnection(runningConnection)
+        eventListeners.forEach { it.onNewRunningConnection(runningConnection) }
     }
 
     private fun removeRunningConnection(endpointId: String) {
@@ -237,7 +272,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
             .find { it.endpointId == endpointId } ?: return
         _runningConnections = _runningConnections
             .filter { it != runningConnection }
-        eventListener.onRunningConnectionLost(runningConnection)
+        eventListeners.forEach { it.onRunningConnectionLost(runningConnection) }
     }
 
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
@@ -277,9 +312,11 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                 }
                 ConnectionsStatusCodes.STATUS_ERROR -> {
                     logW("Result of connection to $connectionTag is STATUS_ERROR ($statusCode)")
+                    removeConnectionRequest(endpointId)
                 }
                 else -> {
                     logW("Result of connection to $connectionTag is status code of $statusCode")
+                    removeConnectionRequest(endpointId)
                 }
             }
             if (connectionRequest is ConnectionRequestImpl) {
@@ -323,7 +360,7 @@ class VisyncNearbyConnectionsImpl @Inject constructor(
                     _connectionsClient.disconnectFromEndpoint(endpointId)
                     return
                 }
-                eventListener.onNewMessage(msg, senderConnection)
+                eventListeners.forEach { it.onNewMessage(msg, senderConnection) }
             }
         }
         override fun onPayloadTransferUpdate(

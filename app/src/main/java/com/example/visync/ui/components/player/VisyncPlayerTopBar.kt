@@ -46,7 +46,9 @@ fun VisyncPlayerTopBar(
             Text("you selected dummy videofile (${selectedVideofile.metadata.filename})")
             return
         }
-        Text("now playing ${selectedVideofile.metadata.filename}")
+        val vidMetadata = selectedVideofile.metadata
+        Text("now playing ${vidMetadata.filename}")
+        Text("resolution: ${vidMetadata.width}x${vidMetadata.height}")
         Text("current speed = $playbackSpeed")
         Text("0.2x speed", modifier = Modifier.clickable { setPlaybackSpeed(0.2f)
             onAnyInteraction() })

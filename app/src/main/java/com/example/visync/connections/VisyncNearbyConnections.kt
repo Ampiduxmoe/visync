@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.StateFlow
 
 interface VisyncNearbyConnections {
     val connectionsState: StateFlow<VisyncNearbyConnectionsState>
-    var eventListener: VisyncNearbyConnectionsListener
 
     fun initialize(config: VisyncNearbyConnectionsConfiguration)
     fun startAdvertising(
@@ -28,7 +27,14 @@ interface VisyncNearbyConnections {
         onTaskFailure: (Exception) -> Unit = {},
         onTaskSuccess: () -> Unit = {},
     )
+    fun tryInitiateConnection(
+        endpointId: String,
+        onTaskFailure: (Exception) -> Unit = {},
+        onTaskSuccess: () -> Unit = {},
+    )
     fun resetToIdle()
+    fun addEventListener(listener: VisyncNearbyConnectionsListener)
+    fun removeEventListener(listener: VisyncNearbyConnectionsListener)
 }
 
 data class VisyncNearbyConnectionsState (
@@ -48,6 +54,7 @@ data class VisyncNearbyConnectionsConfiguration(
 )
 
 interface VisyncNearbyConnectionsListener {
+    fun onBroadcastingStateChanged(newState: BroadcastingState)
     fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint)
     fun onNewConnectionRequest(request: ConnectionRequest)
     fun onNewRunningConnection(connection: RunningConnection)
@@ -56,6 +63,7 @@ interface VisyncNearbyConnectionsListener {
 }
 
 open class EmptyVisyncNearbyConnectionsListener : VisyncNearbyConnectionsListener {
+    override fun onBroadcastingStateChanged(newState: BroadcastingState) { }
     override fun onNewDiscoveredEndpoint(endpoint: DiscoveredEndpoint) { }
     override fun onNewConnectionRequest(request: ConnectionRequest) { }
     override fun onNewRunningConnection(connection: RunningConnection) { }

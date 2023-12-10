@@ -1,7 +1,9 @@
 package com.example.visync.ui.screens.player
 
+import android.app.Activity
 import android.net.Uri
 import android.util.Log
+import android.util.SizeF
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.snap
@@ -22,14 +24,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.Player
 import com.example.visync.player.PlayerWrapperPlaybackControls
 import com.example.visync.player.PlayerWrapperPlaybackState
-import com.example.visync.ui.PlayerMessageSender
 import com.example.visync.ui.components.player.ExoPlayerComposable
 import com.example.visync.ui.components.player.VisyncPlayerOverlay
 import com.google.accompanist.systemuicontroller.rememberSystemUiController
@@ -37,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
+import kotlin.math.sqrt
 
 @Composable
 fun VisyncPlayer(
@@ -46,7 +50,7 @@ fun VisyncPlayer(
     videoConfiguration: VideoConfiguration,
     physicalDevice: VisyncPhysicalDevice,
     isUserHost: Boolean,
-    messageSender: PlayerMessageSender,
+    hostMessenger: HostPlayerMessenger,
     showOverlay: () -> Unit,
     hideOverlay: () -> Unit,
     closePlayer: () -> Unit,
@@ -82,24 +86,35 @@ fun VisyncPlayer(
     }
     val systemUiController = rememberSystemUiController()
     var defaultSystemBarsBehavior by remember { mutableIntStateOf(-1) }
+    val window = (LocalContext.current as Activity).window
+    val insetsController = WindowCompat.getInsetsController(window, window.decorView)
     val autoHidingBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     DisposableEffect(Unit) {
         defaultSystemBarsBehavior = systemUiController.systemBarsBehavior
-        systemUiController.apply {
-            isSystemBarsVisible = false
-            systemBarsBehavior = autoHidingBarsBehavior
-        }
+//        systemUiController.apply {
+//            isSystemBarsVisible = false
+//            systemBarsBehavior = autoHidingBarsBehavior
+//        }
         onDispose {
-            systemUiController.apply {
-                isSystemBarsVisible = true
-                systemBarsBehavior = defaultSystemBarsBehavior
-            }
+//            systemUiController.apply {
+//                isSystemBarsVisible = true
+//                systemBarsBehavior = defaultSystemBarsBehavior
+//            }
             cancelHidingJobAndHide()
         }
     }
     BackHandler {
         closePlayer()
     }
+    val (deviceWidth, deviceHeight) = with(LocalDensity.current) {
+        physicalDevice.run {
+            val dpWidthFromMm = mmToDp(mmDisplayWidth, density)
+            val dpHeightFromMm = mmToDp(mmDisplayHeight, density)
+            Log.d("Device DPs from MMs", "$dpWidthFromMm x $dpHeightFromMm (density: $density)")
+            pxDisplayWidth.toDp() to pxDisplayHeight.toDp()
+        }
+    }
+
     val (videoWidth, videoHeight) = with(LocalDensity.current) {
         videoConfiguration.run {
             physicalDevice.run {
@@ -107,31 +122,31 @@ fun VisyncPlayer(
             }
         }
     }
+
     val (videoOffsetX, videoOffsetY) = with(LocalDensity.current) {
         videoConfiguration.run {
             physicalDevice.run {
-                -mmToDp(mmDevicePositionX, density) to -mmToDp(mmDevicePositionY, density)
+                mmToDp(-mmDevicePositionX, density) to mmToDp(-mmDevicePositionY, density)
             }
         }
     }
 
-    val (deviceWidth, deviceHeight) = with(LocalDensity.current) {
-        physicalDevice.run {
-            pxDisplayWidth.toDp() to pxDisplayHeight.toDp()
-        }
-    }
     if (selectedVideofile != null && selectedVideofile.uri != Uri.EMPTY) {
         Box(modifier = Modifier.fillMaxSize()) {
-            val offsetX = (videoWidth - deviceWidth) / 2 + videoOffsetX
-            val offsetY = videoOffsetY
-            Log.d("tag", "offsetX = $offsetX, offsetY = $offsetY")
+            var finalOffsetX = videoOffsetX
+            if (videoWidth > deviceWidth) { // if video doesn't fit it is centered (why?)
+                finalOffsetX = (videoWidth - deviceWidth) / 2 + videoOffsetX
+            }
+            val finalOffsetY = videoOffsetY
+            Log.d("tag", "offsetX = $finalOffsetX, offsetY = $finalOffsetY")
             Log.d("tag", "videoWidth = $videoWidth, videoHeight = $videoHeight")
+            Log.d("tag", "deviceWidth = $deviceWidth, deviceHeight = $deviceHeight")
             ExoPlayerComposable(
                 player = player,
                 modifier = Modifier
                     .absoluteOffset(
-                        x = offsetX,
-                        y = offsetY
+                        x = finalOffsetX,
+                        y = finalOffsetY
                     )
                     .requiredSize(
                         width = videoWidth,
@@ -159,7 +174,7 @@ fun VisyncPlayer(
             playbackState = playerPlaybackState,
             playbackControls = playerPlaybackControls,
             isUserHost = isUserHost,
-            messageSender = messageSender,
+            hostMessenger = hostMessenger,
             onOverlayClicked = { refreshHidingDelay(defaultDelay) },
             closePlayer = closePlayer,
             disableAutoHiding = { currentHideWithDelayJob?.cancel() },
@@ -170,18 +185,47 @@ fun VisyncPlayer(
 }
 @Serializable
 data class VisyncPhysicalDevice(
-    val mmDeviceWidth: Float,
-    val mmDeviceHeight: Float,
-    val mmDisplayWidth: Float,
-    val mmDisplayHeight: Float,
+    val inDisplaySize: Float,
     val pxDisplayWidth: Float,
     val pxDisplayHeight: Float,
+    val mmDeviceWidth: Float,
+    val mmDeviceHeight: Float,
 ) {
+    private val wh
+        get() = getWidthAndHeightMm(inDisplaySize, pxDisplayWidth, pxDisplayHeight)
+    val mmDisplayWidth
+        get() = wh.width
+    val mmDisplayHeight
+        get() = wh.height
+
     fun mmToDp(
         mm: Float,
         localDensityDp: Float
     ): Dp {
         return (mm * pxDisplayHeight / (mmDisplayHeight * localDensityDp)).dp
+    }
+
+    companion object {
+        val NoDimensionsDevice = VisyncPhysicalDevice(
+            inDisplaySize = 0f,
+            mmDeviceWidth = 0f,
+            mmDeviceHeight = 0f,
+            pxDisplayWidth = 0f,
+            pxDisplayHeight = 0f,
+        )
+
+        fun getWidthAndHeightMm(
+            inDisplaySize: Float,
+            pxDisplayWidth: Float,
+            pxDisplayHeight: Float,
+        ): SizeF {
+            val d = inDisplaySize
+            val w = pxDisplayWidth
+            val h = pxDisplayHeight
+            if (w * w + h * h <= 0f) { return SizeF(0f, 0f) }
+            val a = d / sqrt(w * w + h * h)
+            return SizeF(w * a * 25.4f, h * a * 25.4f)
+        }
     }
 }
 
@@ -190,22 +234,4 @@ data class VideoConfiguration(
     val mmVideoHeight: Float,
     val mmDevicePositionX: Float,
     val mmDevicePositionY: Float,
-)
-
-val ZB631KL = VisyncPhysicalDevice(
-    mmDeviceWidth = 75.50f,
-    mmDeviceHeight = 157.90f,
-    mmDisplayWidth = 68.50f,
-    mmDisplayHeight = 144.61f,
-    pxDisplayWidth = 1080f,
-    pxDisplayHeight = 2280f,
-)
-
-val XiaomiRedmiNote11 = VisyncPhysicalDevice(
-    mmDeviceWidth = 73.87f,
-    mmDeviceHeight = 158.87f,
-    mmDisplayWidth = 67.02f,
-    mmDisplayHeight = 148.93f,
-    pxDisplayWidth = 1080f,
-    pxDisplayHeight = 2400f,
 )

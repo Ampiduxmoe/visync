@@ -4,8 +4,14 @@
     <!--description strings for actions/buttons/etc-->
     <string name="desc_navigation_drawer">Navigation Drawer</string>
     <string name="desc_back">Back</string>
+    <string name="desc_username">My username</string>
+    <string name="desc_username_randomize">Randomize username</string>
+    <string name="desc_physical_device">My device information</string>
+    <string name="desc_light_mode">Switch to light mode</string>
+    <string name="desc_dark_mode">Switch to dark mode</string>
     <string name="desc_add_playlist">Add playlist</string>
     <string name="desc_select_videofiles">Select videofiles to play</string>
+    <string name="desc_loading_icon">Select videofiles to play</string>
     <string name="desc_seek_prev">Seek to previous video</string>
     <string name="desc_seek_next">Seek to next video</string>
     <string name="desc_pause">Pause video</string>
@@ -14,12 +20,7 @@
     <!--preferences-->
     <string name="prefs_profile_file_key">PROFILE_PREFERENCES</string>
     <string name="prefs_profile_username">username</string>
-    <string name="prefs_profile_display_width_px">display_width_px</string>
-    <string name="prefs_profile_display_height_px">display_height_px</string>
-    <string name="prefs_profile_display_width_mm">display_width_mm</string>
-    <string name="prefs_profile_display_height_mm">display_height_mm</string>
-    <string name="prefs_profile_device_width_mm">device_width_mm</string>
-    <string name="prefs_profile_device_height_mm">device_height_mm</string>
+    <string name="prefs_profile_physical_device">physical_device</string>
 
     <!--random strings for experimenting-->
     <string name="navigation_drawer_fab">Navigation Drawer Button</string>
@@ -47,4 +48,13 @@
     <string name="tab_name_my_friends">My friends</string>
     <string name="tab_name_rooms_manage">Manage rooms</string>
     <string name="tab_name_app_settings">Settings</string>
+
+    <!--messages to user-->
+    <string name="connection_restore_denied_by_host">
+        Host refused to restore state of your connection
+    </string>
+    <string name="connection_restore_nothing_to_restore">
+        Host has no entry to restore your connection from.
+        This might be because of an early disconnect before any meaningful data transmission.
+    </string>
 </resources>

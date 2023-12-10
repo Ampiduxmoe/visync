@@ -3,6 +3,7 @@ package com.example.visync.metadata
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
 import android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
 import android.net.Uri
 import android.provider.MediaStore
@@ -25,8 +26,13 @@ class VisyncMetadataReader(
 
         val mediaMetadataRetriever = MediaMetadataRetriever()
         mediaMetadataRetriever.setDataSource(context, contentUri)
-        val width = mediaMetadataRetriever.extractMetadata(METADATA_KEY_VIDEO_WIDTH)!!.toFloat()
-        val height = mediaMetadataRetriever.extractMetadata(METADATA_KEY_VIDEO_HEIGHT)!!.toFloat()
+        val rotation = mediaMetadataRetriever.extractMetadata(METADATA_KEY_VIDEO_ROTATION)?.toInt()
+        Log.d("Metadata Reader", "rotation: $rotation")
+        val w = mediaMetadataRetriever.extractMetadata(METADATA_KEY_VIDEO_WIDTH)!!.toFloat()
+        val h = mediaMetadataRetriever.extractMetadata(METADATA_KEY_VIDEO_HEIGHT)!!.toFloat()
+        val isLandscape = rotation != null && (rotation == 0 || rotation == 180)
+        val finalWidth = if (isLandscape) w else h
+        val finalHeight = if (isLandscape) h else w
         return context.contentResolver
             .query(
                 /* uri = */ contentUri,
@@ -46,8 +52,8 @@ class VisyncMetadataReader(
                 VideoMetadata(
                     filename = displayName ?: contentUri.lastPathSegment ?: return null,
                     duration = duration,
-                    width = width,
-                    height = height
+                    width = finalWidth,
+                    height = finalHeight,
                 )
             }
     }

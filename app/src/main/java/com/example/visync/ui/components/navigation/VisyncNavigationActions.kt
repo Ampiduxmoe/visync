@@ -60,7 +60,6 @@ val ACCOUNT_RELATED_DESTINATIONS = listOf(
     Route.MyProfile,
     Route.Friends,
     Route.RoomsManage,
-    Route.AppSettings
 )
 
 val MAIN_APP_DESTINATIONS = listOf(

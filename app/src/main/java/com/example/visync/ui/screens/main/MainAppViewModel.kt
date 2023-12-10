@@ -1,6 +1,13 @@
 package com.example.visync.ui.screens.main
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
+import android.graphics.Point
+import android.os.Build
+import android.util.Log
+import android.util.Size
+import android.view.Surface
 import androidx.lifecycle.ViewModel
 import com.example.visync.R
 import com.example.visync.data.user.generateNickname
@@ -10,6 +17,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
 @HiltViewModel
@@ -25,14 +34,7 @@ class MainAppViewModel @Inject constructor(
     val uiState: StateFlow<MainAppUiState> = _uiState
 
     val usernamePlaceholder = "Loading..."
-    val physicalDevicePlaceholder = VisyncPhysicalDevice(
-        mmDeviceWidth = 0f,
-        mmDeviceHeight = 0f,
-        mmDisplayWidth = 0f,
-        mmDisplayHeight = 0f,
-        pxDisplayWidth = 0f,
-        pxDisplayHeight = 0f
-    )
+    val physicalDevicePlaceholder = VisyncPhysicalDevice.NoDimensionsDevice
 
     private val _mainAppNavigationUiState = MutableStateFlow(
         MainAppNavigationUiState(
@@ -75,42 +77,22 @@ class MainAppViewModel @Inject constructor(
         _editableUsername = _editableUsername.copy(value = username)
         profilePrefs.edit().putString(usernameKey, username).apply()
 
-        val displayWidthPxKey = context.getString(R.string.prefs_profile_display_width_px)
-        val displayHeightPxKey = context.getString(R.string.prefs_profile_display_height_px)
-        val displayWidthMmKey = context.getString(R.string.prefs_profile_display_width_mm)
-        val displayHeightMmKey = context.getString(R.string.prefs_profile_display_height_mm)
-        val deviceWidthMmKey = context.getString(R.string.prefs_profile_device_width_mm)
-        val deviceHeightMmKey = context.getString(R.string.prefs_profile_device_height_mm)
-
-        val displayWidthPx = profilePrefs.getFloat(displayWidthPxKey, -1f)
-
-        if (displayWidthPx == -1f) {
+        val physicalDeviceKey = context.getString(R.string.prefs_profile_physical_device)
+        val physicalDeviceString = profilePrefs.getString(physicalDeviceKey, null)
+        if (physicalDeviceString.isNullOrEmpty()) {
             val device = _editablePhysicalDevice.value
             profilePrefs
                 .edit()
-                .putFloat(displayWidthPxKey, physicalDevicePlaceholder.pxDisplayWidth)
-                .putFloat(displayHeightPxKey, physicalDevicePlaceholder.pxDisplayHeight)
-                .putFloat(displayWidthMmKey, physicalDevicePlaceholder.mmDisplayWidth)
-                .putFloat(displayHeightMmKey, physicalDevicePlaceholder.mmDisplayHeight)
-                .putFloat(deviceWidthMmKey, physicalDevicePlaceholder.mmDeviceWidth)
-                .putFloat(deviceHeightMmKey, physicalDevicePlaceholder.mmDeviceHeight)
+                .putString(physicalDeviceKey,  Json.encodeToString(device))
                 .apply()
         } else {
-            val displayHeightPx = profilePrefs.getFloat(displayHeightPxKey, -1f)
-            val displayWidthMm = profilePrefs.getFloat(displayWidthMmKey, -1f)
-            val displayHeightMm = profilePrefs.getFloat(displayHeightMmKey, -1f)
-            val deviceWidthMm = profilePrefs.getFloat(deviceWidthMmKey, -1f)
-            val deviceHeightMm = profilePrefs.getFloat(deviceHeightMmKey, -1f)
-            _editablePhysicalDevice = _editablePhysicalDevice.copy(
-                value = VisyncPhysicalDevice(
-                    mmDeviceWidth = deviceWidthMm,
-                    mmDeviceHeight = deviceHeightMm,
-                    mmDisplayWidth = displayWidthMm,
-                    mmDisplayHeight = displayHeightMm,
-                    pxDisplayWidth = displayWidthPx,
-                    pxDisplayHeight = displayHeightPx
+            try {
+                _editablePhysicalDevice = _editablePhysicalDevice.copy(
+                    value = Json.decodeFromString(physicalDeviceString)
                 )
-            )
+            } catch (e: Exception) {
+                Log.w("Preferences", "Failed to decode physical device string", e)
+            }
         }
     }
 
@@ -147,22 +129,11 @@ class MainAppViewModel @Inject constructor(
 
     fun applyPhysicalDeviceChanges(context: Context) {
         val profilePrefs = getProfilePreferences(context)
-        val displayWidthPxKey = context.getString(R.string.prefs_profile_display_width_px)
-        val displayHeightPxKey = context.getString(R.string.prefs_profile_display_height_px)
-        val displayWidthMmKey = context.getString(R.string.prefs_profile_display_width_mm)
-        val displayHeightMmKey = context.getString(R.string.prefs_profile_display_height_mm)
-        val deviceWidthMmKey = context.getString(R.string.prefs_profile_device_width_mm)
-        val deviceHeightMmKey = context.getString(R.string.prefs_profile_device_height_mm)
+        val physicalDeviceKey = context.getString(R.string.prefs_profile_physical_device)
         val device = _editablePhysicalDevice.value
-
         profilePrefs
             .edit()
-            .putFloat(displayWidthPxKey, device.pxDisplayWidth)
-            .putFloat(displayHeightPxKey, device.pxDisplayHeight)
-            .putFloat(displayWidthMmKey, device.mmDisplayWidth)
-            .putFloat(displayHeightMmKey, device.mmDisplayHeight)
-            .putFloat(deviceWidthMmKey, device.mmDeviceWidth)
-            .putFloat(deviceHeightMmKey, device.mmDeviceHeight)
+            .putString(physicalDeviceKey, Json.encodeToString(device))
             .apply()
     }
 }
@@ -193,3 +164,54 @@ data class EditablePhysicalDevice(
     val setValue: (VisyncPhysicalDevice) -> Unit,
     val applyChanges: (Context) -> Unit,
 )
+
+tailrec fun Context.findActivity(): Activity =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> this.baseContext.findActivity()
+        else -> throw IllegalArgumentException("Could not find activity!")
+    }
+
+fun getAvailableWindowSize(context: Context): Size {
+    val activity: Activity = try {
+        context.findActivity()
+    } catch (e: Exception) {
+        // no activity probably means it is called from @Preview
+        return Size(0, 0)
+    }
+    return if (Build.VERSION.SDK_INT >= 30) {
+        val wMetrics = activity.windowManager.currentWindowMetrics
+        val bounds = wMetrics.bounds
+        Size(bounds.width(), bounds.height())
+    } else {
+        val display = activity.windowManager.defaultDisplay
+        val realSize = Point()
+        display.getRealSize(realSize)
+        Size(realSize.x, realSize.y)
+    }
+}
+
+fun getDeviceRotation(context: Context): Int {
+    val activity: Activity = try {
+        context.findActivity()
+    } catch (e: Exception) {
+        // no activity probably means it is called from @Preview
+        return 0
+    }
+    val rotationCode = when {
+        Build.VERSION.SDK_INT >= 30 -> context.display!!.rotation
+        else -> activity.windowManager.defaultDisplay.rotation
+    }
+    return when (rotationCode) {
+        Surface.ROTATION_0 -> 0
+        Surface.ROTATION_90 -> 90
+        Surface.ROTATION_180 -> 180
+        Surface.ROTATION_270 -> 270
+        else -> 0
+    }
+}
+
+fun getAvailableDrawingSize(context: Context): Size {
+    val displayMetrics = context.resources.displayMetrics
+    return Size(displayMetrics.widthPixels, displayMetrics.heightPixels)
+}

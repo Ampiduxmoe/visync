@@ -41,8 +41,8 @@ import com.example.visync.metadata.VisyncMetadataReader
 @Composable
 fun SetupTabSelectFiles(
     isUserHost: Boolean,
-    selectedVideofiles: List<Videofile>,
-    playbackSetupOptions: PlaybackSetupOptions,
+    localSelectedVideofiles: List<Videofile>,
+    playbackOptions: PlaybackOptions,
     setSelectedVideofiles: (List<Videofile>) -> Unit,
     addVideofiles: (List<Videofile>) -> Unit,
     setSelectedVideofileIndex: (Int) -> Unit,
@@ -115,7 +115,7 @@ fun SetupTabSelectFiles(
     ) {
         HostSelectionColumn(
             isUserHost = isUserHost,
-            playbackSetupOptions = playbackSetupOptions,
+            playbackOptions = playbackOptions,
             selectVideofiles = reselectVideos,
             addVideofiles = addVideos,
             setSelectedVideofileIndex = setSelectedVideofileIndex,
@@ -124,8 +124,8 @@ fun SetupTabSelectFiles(
         )
         if (!isUserHost) {
             GuestSelectionColumn(
-                hostSelection = playbackSetupOptions.videofilesMetadata,
-                selectedVideofiles = selectedVideofiles,
+                hostSelection = playbackOptions.videofilesMetadata,
+                userSelection = localSelectedVideofiles,
                 missingFilenames = missingFilenames,
                 selectVideofiles = reselectVideos,
                 addVideofiles = addVideos,
@@ -140,14 +140,14 @@ fun SetupTabSelectFiles(
 @Composable
 private fun HostSelectionColumn(
     isUserHost: Boolean,
-    playbackSetupOptions: PlaybackSetupOptions,
+    playbackOptions: PlaybackOptions,
     selectVideofiles: () -> Unit,
     addVideofiles: () -> Unit,
     setSelectedVideofileIndex: (Int) -> Unit,
     modifier: Modifier = Modifier,
     scrollState: ScrollState = rememberScrollState(),
 ) {
-    val videofilesMetadata = playbackSetupOptions.videofilesMetadata
+    val videofilesMetadata = playbackOptions.videofilesMetadata
     val videofileNames = videofilesMetadata.map { it.filename }
     val hasSelectedVideofiles = videofilesMetadata.isNotEmpty()
 
@@ -183,12 +183,11 @@ private fun HostSelectionColumn(
                         Text("Host did not select anything yet")
                     }
                 }
-            }
-            else {
+            } else {
                 videofileNames.forEachIndexed { index, videofileName ->
                     VideofileItem(
                         videofileName = videofileName,
-                        isSelected = index == playbackSetupOptions.selectedVideofileIndex,
+                        isSelected = index == playbackOptions.selectedVideofileIndex,
                         clickModifier = Modifier.clickable {
                             if (isUserHost) {
                                 setSelectedVideofileIndex(index)
@@ -204,7 +203,7 @@ private fun HostSelectionColumn(
 @Composable
 private fun GuestSelectionColumn(
     hostSelection: List<VideoMetadata>,
-    selectedVideofiles: List<Videofile>,
+    userSelection: List<Videofile>,
     missingFilenames: List<String>,
     selectVideofiles: () -> Unit,
     addVideofiles: () -> Unit,
@@ -213,7 +212,7 @@ private fun GuestSelectionColumn(
     scrollState: ScrollState = rememberScrollState(),
 ) {
     val hasHostSelectedVideofiles = hostSelection.isNotEmpty()
-    val hasUserSelectedVideofiles = selectedVideofiles.isNotEmpty()
+    val hasUserSelectedVideofiles = userSelection.isNotEmpty()
     Column(
         modifier = modifier
     ) {
