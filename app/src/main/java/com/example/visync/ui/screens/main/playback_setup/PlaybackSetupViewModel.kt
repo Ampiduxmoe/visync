@@ -62,13 +62,13 @@ import kotlin.math.absoluteValue
 
 /*
 TODO: it is better to move connections functionality into separate connections manager class.
-So we would have nearby connections wrapper class managing raw connections
-and visync connections manager that knows some details of the app and keeps track of
-things like users online nickname and does initial communication (handshake) with others.
-It will be much more logical to build ping system around it that will be used by
-both player screen and playback setup screen and not how it is done now.
-Also code will be much cleaner in guest class where we have some
-connectivity state vars and checks interweaving with real guest viewer logic.
+    So we would have nearby connections wrapper class managing raw connections
+    and visync connections manager that knows some details of the app and keeps track of
+    things like users online nickname and does initial communication (handshake) with others.
+    It will be much more logical to build ping system around it that will be used by
+    both player screen and playback setup screen and not how it is done now.
+    Also code will be much cleaner in guest class where we have some
+    connectivity state vars and checks interweaving with real guest viewer logic.
 */
 @OptIn(FlowPreview::class)
 @HiltViewModel
@@ -109,6 +109,15 @@ class PlaybackSetupViewModel @Inject constructor(
         )
     val hostDevicePositions = _roleManager.playbackSetupHostState.devicePositionsConfigurationState
     val hostConnectionState = _roleManager.playbackSetupHostState.hostConnectionState
+        // better not to debounce this since if you have many ping receivers
+        // you get bombarded with responses constantly and never update your state
+        // solution is to update ping data every second or so
+//        .debounce(PING_STATE_DEBOUNCE_DELAY)
+//        .stateIn(
+//            scope = viewModelScope,
+//            started = SharingStarted.WhileSubscribed(STATE_SHARING_STOP_DELAY),
+//            initialValue = _roleManager.playbackSetupHostState.hostConnectionState.value
+//        )
     val hostActions: PlaybackSetupHostActions = _roleManager.playbackSetupHostState
 
     val guestPlaybackSetupState = _roleManager.playbackSetupGuestState.playbackSetupState
@@ -172,6 +181,7 @@ class PlaybackSetupViewModel @Inject constructor(
     companion object {
         private const val STATE_SHARING_STOP_DELAY = 5000L
         private const val STATE_DEBOUNCE_DELAY = 50L
+        private const val PING_STATE_DEBOUNCE_DELAY = 400L
     }
 }
 
@@ -616,7 +626,7 @@ abstract class PlaybackSetupHost(
                     username = connection.username
                 )
                 otherWatchers = otherWatchers + newWatcher
-                _watcherPings = _watcherPings + SingleEndpointPings(
+                _watcherPings = _watcherPings + EndpointPingData(
                     endpointId = newWatcher.endpointId,
                     pingData = PingData()
                 )
@@ -790,12 +800,16 @@ abstract class PlaybackSetupHost(
         playbackOptions = playbackOptions.copy(
             videofilesMetadata = videofiles.map { it.metadata }
         )
-        positionsEditor = positionsEditor?.withReplacedVideo(
-            videoMetadata = videofiles.first().metadata
-        ) ?: DevicePositionsEditor.create(
-            watchers = allWatchers.filter { it.isApproved },
-            videoMetadata = videofiles.first().metadata,
-        )
+        if (videofiles.isEmpty()) {
+            positionsEditor = null
+        } else {
+            positionsEditor = positionsEditor?.withReplacedVideo(
+                videoMetadata = videofiles.first().metadata
+            ) ?: DevicePositionsEditor.create(
+                watchers = allWatchers.filter { it.isApproved },
+                videoMetadata = videofiles.first().metadata,
+            )
+        }
         messenger.sendPlaybackOptionsUpdate()
     }
 
@@ -1904,11 +1918,11 @@ data class PingData(
 }
 
 @Serializable
-data class SingleEndpointPings(
+data class EndpointPingData(
     val endpointId: String,
     val pingData: PingData
 ) {
-    fun withUnansweredPing(pingTimestamp: Long): SingleEndpointPings {
+    fun withUnansweredPing(pingTimestamp: Long): EndpointPingData {
         return copy(
             pingData = pingData.withAddedEntry(
                 PingEntry(
@@ -1922,7 +1936,7 @@ data class SingleEndpointPings(
 
 data class HostConnectionState(
     val isAdvertising: Boolean,
-    val allWatcherPings: List<SingleEndpointPings>
+    val allWatcherPings: List<EndpointPingData>
 ) {
     val hasConnections
         get() = allWatcherPings.isNotEmpty()

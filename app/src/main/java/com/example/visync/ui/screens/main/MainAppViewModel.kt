@@ -165,20 +165,16 @@ data class EditablePhysicalDevice(
     val applyChanges: (Context) -> Unit,
 )
 
-tailrec fun Context.findActivity(): Activity =
+tailrec fun Context.findActivity(): Activity? =
     when (this) {
         is Activity -> this
         is ContextWrapper -> this.baseContext.findActivity()
-        else -> throw IllegalArgumentException("Could not find activity!")
+        else -> null
     }
 
 fun getAvailableWindowSize(context: Context): Size {
-    val activity: Activity = try {
-        context.findActivity()
-    } catch (e: Exception) {
-        // no activity probably means it is called from @Preview
-        return Size(0, 0)
-    }
+    // no activity probably means it is called from @Preview
+    val activity = context.findActivity() ?: return Size(0, 0)
     return if (Build.VERSION.SDK_INT >= 30) {
         val wMetrics = activity.windowManager.currentWindowMetrics
         val bounds = wMetrics.bounds
@@ -192,12 +188,8 @@ fun getAvailableWindowSize(context: Context): Size {
 }
 
 fun getDeviceRotation(context: Context): Int {
-    val activity: Activity = try {
-        context.findActivity()
-    } catch (e: Exception) {
-        // no activity probably means it is called from @Preview
-        return 0
-    }
+    // no activity probably means it is called from @Preview
+    val activity: Activity = context.findActivity() ?: return 0
     val rotationCode = when {
         Build.VERSION.SDK_INT >= 30 -> context.display!!.rotation
         else -> activity.windowManager.defaultDisplay.rotation

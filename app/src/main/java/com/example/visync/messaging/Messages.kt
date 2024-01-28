@@ -2,7 +2,7 @@ package com.example.visync.messaging
 
 import com.example.visync.ui.screens.main.playback_setup.DevicePositionsEditor
 import com.example.visync.ui.screens.main.playback_setup.PlaybackOptions
-import com.example.visync.ui.screens.main.playback_setup.SingleEndpointPings
+import com.example.visync.ui.screens.main.playback_setup.EndpointPingData
 import com.example.visync.ui.screens.main.playback_setup.Watcher
 import com.example.visync.ui.screens.player.VisyncPhysicalDevice
 import kotlinx.serialization.Serializable
@@ -146,7 +146,7 @@ class OpenPlayerMessage(
 
 @Serializable
 class PlaybackPauseUnpauseMessage(
-    val pingList: List<SingleEndpointPings>,
+    val pingList: List<EndpointPingData>,
     val doPause: Boolean,
     val position: Long,
 ) : VisyncMessage(
@@ -155,7 +155,7 @@ class PlaybackPauseUnpauseMessage(
 
 @Serializable
 class PlaybackSeekToMessage(
-    val pingList: List<SingleEndpointPings>,
+    val pingList: List<EndpointPingData>,
     val seekTo: Long,
 ) : VisyncMessage(
     type = PlaybackSeekToMessage::class.simpleName!!
@@ -219,7 +219,7 @@ class SyncBallMessage(
     val posY: Float,
     val velocityX: Float,
     val velocityY: Float,
-    val pingData: List<SingleEndpointPings>
+    val pingData: List<EndpointPingData>
 ) : VisyncMessage(
     type = SyncBallMessage::class.simpleName!!
 )

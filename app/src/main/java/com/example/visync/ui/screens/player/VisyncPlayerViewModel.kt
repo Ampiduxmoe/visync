@@ -20,7 +20,7 @@ import com.example.visync.messaging.PongMessage
 import com.example.visync.messaging.VisyncMessage
 import com.example.visync.player.PlayerWrapper
 import com.example.visync.ui.screens.main.playback_setup.PingData
-import com.example.visync.ui.screens.main.playback_setup.SingleEndpointPings
+import com.example.visync.ui.screens.main.playback_setup.EndpointPingData
 import com.example.visync.ui.screens.main.playback_setup.getCurrentTimestamp
 import com.example.visync.ui.screens.main.playback_setup.withReplacedValueFoundByReference
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,9 +49,9 @@ class VisyncPlayerViewModel @Inject constructor(
 
     /** Host-only state */
     private val _pingData = MutableStateFlow(
-        emptyList<SingleEndpointPings>()
+        emptyList<EndpointPingData>()
     )
-    val pingState: StateFlow<List<SingleEndpointPings>> = _pingData
+    val pingState: StateFlow<List<EndpointPingData>> = _pingData
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val updateCurrentPositionTask = object : Runnable {
@@ -119,7 +119,7 @@ class VisyncPlayerViewModel @Inject constructor(
                 val runningConnections = connections.connectionsState.value.runningConnections
                 val currentEndpointIds = runningConnections.map { it.endpointId }
                 val newEndpointIds = currentEndpointIds.filter { it !in knownEndpointIds }
-                val newEntries = newEndpointIds.map { SingleEndpointPings(it, PingData()) }
+                val newEntries = newEndpointIds.map { EndpointPingData(it, PingData()) }
                 if (newEntries.isNotEmpty()) {
                     _pingData.update { it + newEntries }
                 }
@@ -217,7 +217,7 @@ class VisyncPlayerViewModel @Inject constructor(
             )
         }
 
-        override fun getPingData(): List<SingleEndpointPings> { // ofc this should not be here but anyways, to get that prototype faster
+        override fun getPingData(): List<EndpointPingData> { // ofc this should not be here but anyways, to get that prototype faster
             return _pingData.value
         }
 
@@ -310,7 +310,7 @@ data class VisyncPlayerUiState(
 )
 
 interface HostPlayerMessenger {
-    fun getPingData(): List<SingleEndpointPings>
+    fun getPingData(): List<EndpointPingData>
     fun sendPause()
     fun sendUnpause()
     fun sendSeekTo(seekTo: Long)

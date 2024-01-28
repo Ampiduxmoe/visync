@@ -1,5 +1,6 @@
 package com.example.visync.ui.screens.main.playback_setup
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -18,10 +20,16 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.media3.common.Player
 import com.example.visync.R
 import com.example.visync.data.videofiles.Videofile
+import com.example.visync.metadata.VideoMetadata
+import com.example.visync.ui.components.navigation.getSimplePhysicalDevice
+import kotlin.math.max
 
 @Composable
 fun PlaybackSetupGuestScreen(
@@ -90,6 +98,11 @@ fun PlaybackSetupGuestScreen(
                     },
                     addVideofiles = {
                         setSelectedVideofiles(playbackSetupState.localSelectedVideofiles + it)
+                    },
+                    removeVideoByMetadata = { metadata ->
+                        setSelectedVideofiles(playbackSetupState.localSelectedVideofiles.filter {
+                            it.metadata != metadata
+                        })
                     },
                     setSelectedVideofileIndex = {
 
@@ -196,7 +209,7 @@ fun PlaybackSetupHostScreen(
                 )
             }
         }
-        Box(modifier = Modifier.fillMaxSize()) {
+        Surface(modifier = Modifier.fillMaxSize()) {
             this@Column.AnimatedVisibility(
                 visible = selectedTabName == setupSelectFilesTab,
                 enter = enterTransition(),
@@ -210,7 +223,16 @@ fun PlaybackSetupHostScreen(
                         setSelectedVideofiles(it)
                     },
                     addVideofiles = {
-                        setSelectedVideofiles(it) // TODO
+                        setSelectedVideofiles(playbackSetupState.localSelectedVideofiles + it)
+                    },
+                    removeVideoByMetadata = { metadata ->
+                        val newFileList = playbackSetupState.localSelectedVideofiles.filter {
+                            it.metadata != metadata
+                        }
+                        if (playbackOptions.selectedVideofileIndex >= newFileList.size) {
+                            hostActions.setSelectedVideofileIndex(max(newFileList.size - 1, 0))
+                        }
+                        setSelectedVideofiles(newFileList)
                     },
                     setSelectedVideofileIndex = {
                         hostActions.setSelectedVideofileIndex(it)
@@ -262,6 +284,101 @@ fun PlaybackSetupHostScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+@Preview
+fun PlaybackSetupHostScreenPreview() {
+    PlaybackSetupHostScreen(
+        playbackSetupState = PlaybackSetupState(
+            watchers = getFakeWatchers(),
+            playbackOptions = getFakePlaybackOptions(),
+            localSelectedVideofiles = getFakeVideofiles()
+        ),
+        hostConnectionState = HostConnectionState(
+            isAdvertising = true,
+            allWatcherPings = getFakeWatcherPings()
+        ),
+        hostActions = getFakePlaybackSetupHostActions(),
+        setSelectedVideofiles = {},
+        positionsEditor = null,
+        play = {},
+    )
+}
+
+fun getFakeWatchers(): List<Watcher> {
+    return listOf(
+        Watcher(
+            endpointId = "FAKE",
+            username = "CoolGuy",
+            messagingVersion = null,
+            physicalDevice = getSimplePhysicalDevice(),
+            isApproved = false,
+            missingVideofileNames = emptyList(),
+        )
+    )
+}
+
+fun getFakePlaybackOptions(): PlaybackOptions {
+    return PlaybackOptions(
+        videofilesMetadata = listOf(
+            getFakeVideoMetadata("MyVideo.mp4")
+        ),
+        selectedVideofileIndex = 0,
+        playbackSpeed = 1f,
+        repeatMode = Player.REPEAT_MODE_OFF,
+    )
+}
+
+fun getFakeVideofiles(): List<Videofile> {
+    return listOf(
+        Videofile(
+            uri = Uri.EMPTY,
+            metadata = getFakeVideoMetadata("MyVideo.mp4")
+        )
+    )
+}
+
+fun getFakeVideoMetadata(name: String): VideoMetadata {
+    return VideoMetadata(
+        filename = name,
+        duration = 1000L,
+        width = 2000f,
+        height = 1000f,
+    )
+}
+
+fun getFakeWatcherPings(): List<EndpointPingData> {
+    return listOf(
+        EndpointPingData(
+            endpointId = "FAKE",
+            pingData = PingData(
+
+            )
+        )
+    )
+}
+
+fun getFakePlaybackSetupHostActions(): PlaybackSetupHostActions {
+    return object : PlaybackSetupHostActions {
+        override fun startAdvertisingRoom() {}
+        override fun stopAdvertisingRoom() {}
+        override fun stopPinging() {}
+        override fun approveWatcher(watcher: Watcher) {}
+        override fun disapproveWatcher(watcher: Watcher) {}
+        override fun setSelectedVideofileIndex(index: Int) {}
+        override fun setPlaybackSpeed(playbackSpeed: Float) {}
+        override fun setRepeatMode(repeatMode: @Player.RepeatMode Int) {}
+        override fun saveDevicePositions(newValue: DevicePositionsEditor) {}
+        override fun sendOpenPlayer() {}
+        override suspend fun sendSyncBall(position: Offset, velocity: Offset) {}
+        override fun getPlaybackSetupSelfAsWatcher(): Watcher {
+            return getFakeWatchers()[0]
+        }
+        override fun getPlaybackSetupHostAsWatcher(): Watcher {
+            return getFakeWatchers()[0]
         }
     }
 }

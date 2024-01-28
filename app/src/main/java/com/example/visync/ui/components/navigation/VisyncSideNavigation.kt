@@ -470,11 +470,27 @@ private fun PhysicalDeviceButton(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PhysicalDeviceDialog(
     editablePhysicalDevice: EditablePhysicalDevice,
     onDismissRequest: () -> Unit,
+) {
+    GenericAlertDialog(
+        onDismissRequest = onDismissRequest
+    ) {
+        PhysicalDeviceDialogContent(
+            editablePhysicalDevice = editablePhysicalDevice,
+            onCancel = onDismissRequest
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GenericAlertDialog(
+    onDismissRequest: () -> Unit,
+    surfaceColor: Color = MaterialTheme.colorScheme.surface,
+    content: @Composable () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest
@@ -484,12 +500,10 @@ private fun PhysicalDeviceDialog(
                 .wrapContentWidth()
                 .wrapContentHeight(),
             shape = MaterialTheme.shapes.large,
-            tonalElevation = AlertDialogDefaults.TonalElevation
+            tonalElevation = AlertDialogDefaults.TonalElevation,
+            color = surfaceColor
         ) {
-            PhysicalDeviceDialogContent(
-                editablePhysicalDevice = editablePhysicalDevice,
-                onCancel = onDismissRequest
-            )
+            content()
         }
     }
 }

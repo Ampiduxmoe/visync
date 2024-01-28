@@ -10,6 +10,11 @@
     <string name="desc_light_mode">Switch to light mode</string>
     <string name="desc_dark_mode">Switch to dark mode</string>
     <string name="desc_add_playlist">Add playlist</string>
+    <string name="desc_current_video">Current selected video</string>
+    <string name="desc_remove_video">Remove video</string>
+    <string name="desc_video_is_matching">Video you selected perfectly matches host\'s</string>
+    <string name="desc_video_is_partially_matching">Video you selected partially matches host\'s</string>
+    <string name="desc_video_is_missing">No file selected to match this video</string>
     <string name="desc_select_videofiles">Select videofiles to play</string>
     <string name="desc_loading_icon">Select videofiles to play</string>
     <string name="desc_seek_prev">Seek to previous video</string>

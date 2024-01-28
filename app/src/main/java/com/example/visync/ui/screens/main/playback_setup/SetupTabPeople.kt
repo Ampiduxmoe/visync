@@ -73,7 +73,7 @@ fun SetupTabPeople(
     meAsWatcher: Watcher,
     notApprovedWatchers: List<Watcher>,
     approvedWatchers: List<Watcher>,
-    watcherPings: List<SingleEndpointPings>?,
+    watcherPings: List<EndpointPingData>?,
     videoMetadata: VideoMetadata?,
     positionsEditor: DevicePositionsEditor?,
     saveDevicePositions: (DevicePositionsEditor) -> Unit,

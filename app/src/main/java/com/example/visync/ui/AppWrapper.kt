@@ -3,13 +3,18 @@ package com.example.visync.ui
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.fadeIn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -17,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.visync.ImmersiveModeToggler
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.components.navigation.TopLevelRoute
 import com.example.visync.ui.screens.main.MainApp
@@ -30,6 +36,7 @@ fun AppWrapper(
     windowSize: WindowSizeClass,
     isDarkTheme: Boolean,
     setDarkTheme: (Boolean) -> Unit,
+    immersiveModeToggler: ImmersiveModeToggler,
 ) {
     val context = LocalContext.current
 
@@ -50,6 +57,7 @@ fun AppWrapper(
             navStatePhysicalDevice == mainAppViewModel.physicalDevicePlaceholder
     if (navStateHasPlaceholders) {
         mainAppViewModel.initializeNavigationUiState(context)
+        return
     }
 
     val visyncPlayerViewModel = hiltViewModel<VisyncPlayerViewModel>()
@@ -94,7 +102,8 @@ fun AppWrapper(
                     }
                     topLevelNavigationActions.navigateTo(TopLevelRoute.Player.routeString)
                 },
-                playbackControls = playbackControls
+                playbackControls = playbackControls,
+                immersiveModeToggler = immersiveModeToggler,
             )
         }
         composable(
@@ -104,6 +113,7 @@ fun AppWrapper(
         ) {
             val enterAsHost = finalPlaybackSetupOutput.value!!.isUserHost
             DisposableEffect(Unit) {
+                immersiveModeToggler.toggle(true)
                 if (enterAsHost) {
                     visyncPlayerViewModel.listenToNearbyConnectionsAsHost()
                     visyncPlayerViewModel.startPinging()
@@ -111,6 +121,7 @@ fun AppWrapper(
                     visyncPlayerViewModel.listenToNearbyConnectionsAsGuest()
                 }
                 onDispose {
+                    immersiveModeToggler.toggle(false)
                     visyncPlayerViewModel.stopPinging()
                     visyncPlayerViewModel.stopListeningToNearbyConnections()
                 }
@@ -131,6 +142,24 @@ fun AppWrapper(
                 },
                 player = visyncPlayerViewModel.playerWrapper.getPlayer(),
             )
+        }
+    }
+}
+
+@Composable
+fun Test(name: String = "Test", modifier: Modifier = Modifier) {
+    Row(
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        modifier = modifier
+    ) {
+        for (iii in 1..3) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                for (i in 1..50) {
+                    Text(iii.toString() + i.toString())
+                }
+            }
         }
     }
 }

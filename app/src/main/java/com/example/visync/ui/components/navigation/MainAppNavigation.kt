@@ -4,7 +4,12 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalNavigationDrawer
@@ -64,6 +69,8 @@ fun MainAppNavigation(
     when (navigationType) {
         NavigationType.BOTTOM_NAVBAR_AND_DRAWER -> {
             ModalNavigationDrawer(
+//                modifier = Modifier.consumeWindowInsets(WindowInsets.systemBars), // if we want to draw full screen
+//                modifier = Modifier.statusBarsPadding().systemBarsPadding(), // if we need to draw safe
                 drawerContent = {
                     ModalNavigationDrawerContent(
                         isDarkTheme = isDarkTheme,
@@ -85,7 +92,7 @@ fun MainAppNavigation(
                 drawerState = drawerState
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().statusBarsPadding().systemBarsPadding()
                 ) {
                     Box(
                         modifier = Modifier.weight(1f)

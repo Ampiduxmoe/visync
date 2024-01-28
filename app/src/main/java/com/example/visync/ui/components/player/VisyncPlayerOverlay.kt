@@ -78,7 +78,13 @@ fun VisyncPlayerOverlay(
                         val timeMillis = (videoDuration * seekTo).toLong()
                         hostMessenger.sendSeekTo(timeMillis)
                         val pingData = hostMessenger.getPingData()
-                        val actionDelay = pingData.maxOf { it.pingData.weightedAverage }.toLong()
+                        val guestsCount = pingData.size
+                        val actionDelay = when {
+                            guestsCount > 0 -> pingData.maxOf {
+                                it.pingData.weightedAverage
+                            }.toLong()
+                            else -> 0L
+                        }
                         coroutineScope.launch {
                             delay(actionDelay)
                             playbackControls.seekTo(seekTo)
@@ -97,7 +103,13 @@ fun VisyncPlayerOverlay(
                     if (isUserHost) {
                         hostMessenger.sendPause()
                         val pingData = hostMessenger.getPingData()
-                        val actionDelay = pingData.maxOf { it.pingData.weightedAverage }.toLong()
+                        val guestsCount = pingData.size
+                        val actionDelay = when {
+                            guestsCount > 0 -> pingData.maxOf {
+                                it.pingData.weightedAverage
+                            }.toLong()
+                            else -> 0L
+                        }
                         // actually we don't want any delay since all watchers seek to our pause position
                         playbackControls.pause()
                         return@VisyncPlayerBottomControls
@@ -108,10 +120,14 @@ fun VisyncPlayerOverlay(
                     if (isUserHost) {
                         hostMessenger.sendUnpause()
                         val pingData = hostMessenger.getPingData()
-                        val actionDelay = pingData.maxOf {
-                            Log.d("avg", "${it.pingData.weightedAverage}")
-                            it.pingData.weightedAverage
-                        }.toLong()
+                        val guestsCount = pingData.size
+                        val actionDelay = when {
+                            guestsCount > 0 -> pingData.maxOf {
+                                Log.d("avg", "${it.pingData.weightedAverage}")
+                                it.pingData.weightedAverage
+                            }.toLong()
+                            else -> 0L
+                        }
                         coroutineScope.launch {
                             delay(actionDelay)
                             playbackControls.unpause()

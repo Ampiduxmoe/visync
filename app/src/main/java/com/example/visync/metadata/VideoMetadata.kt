@@ -20,4 +20,10 @@ data class VideoMetadata(
     ): this(filename, duration, width, height) {
         this.altFilename = altFilename
     }
+
+    fun equalsByContent(other: VideoMetadata): Boolean {
+        return duration == other.duration &&
+            width == other.width &&
+            height == other.height
+    }
 }
