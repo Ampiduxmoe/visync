@@ -15,6 +15,10 @@
     <string name="desc_video_is_matching">Video you selected perfectly matches host\'s</string>
     <string name="desc_video_is_partially_matching">Video you selected partially matches host\'s</string>
     <string name="desc_video_is_missing">No file selected to match this video</string>
+    <string name="desc_repeat_icon">Repeat icon</string>
+    <string name="desc_next_repeat_mode">Select next repeat mode</string>
+    <string name="desc_prev_repeat_mode">Select previous repeat mode</string>
+    <string name="desc_playback_speed_icon">Playback speed icon</string>
     <string name="desc_select_videofiles">Select videofiles to play</string>
     <string name="desc_loading_icon">Select videofiles to play</string>
     <string name="desc_seek_prev">Seek to previous video</string>

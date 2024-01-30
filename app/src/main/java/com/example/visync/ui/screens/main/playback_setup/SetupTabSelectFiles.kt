@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -202,6 +204,15 @@ private fun SelectedVideosList(
                     matchDialogMetadata = metadata
                     showVideoMatchInfoDialog = true
                 }
+                val isLightTheme = MaterialTheme.colorScheme.isLight()
+                val errorColor =  when (isLightTheme) {
+                    true -> MaterialTheme.colorScheme.error
+                    false -> MaterialTheme.colorScheme.errorContainer
+                }
+                val warningColor = when (isLightTheme) {
+                    true -> MaterialTheme.colorScheme.errorContainer
+                    false -> MaterialTheme.colorScheme.error
+                }
                 videofilesMetadata.forEachIndexed { index, metadata ->
                     val isGuestError = metadata.filename in missingFilenames
                     val localMatchMetadata = when {
@@ -221,6 +232,8 @@ private fun SelectedVideosList(
                         isSelected = index == playbackOptions.selectedVideofileIndex,
                         isGuestError = isGuestError,
                         isGuestWarning = isGuestWarning,
+                        errorColor = errorColor,
+                        warningColor = warningColor,
                         removeVideo = { removeVideoByMetadata(metadata) },
                         clickModifier = Modifier.clickable {
                             if (isUserHost) {
@@ -245,7 +258,9 @@ private fun SelectedVideosList(
                         metadataToCompare = matchDialogMetadata,
                         removeVideoByMetadata = removeVideoByMetadata,
                         addMatchToFilename = addMatchToFilename,
-                        close = { showVideoMatchInfoDialog = false }
+                        close = { showVideoMatchInfoDialog = false },
+                        errorColor = errorColor,
+                        warningColor = warningColor,
                     )
                 }
             }
@@ -260,6 +275,8 @@ private fun VideofileItem(
     isSelected: Boolean,
     isGuestError: Boolean? = null,
     isGuestWarning: Boolean? = null,
+    errorColor: Color = MaterialTheme.colorScheme.error,
+    warningColor: Color = MaterialTheme.colorScheme.errorContainer,
     removeVideo: () -> Unit,
     @SuppressLint("ModifierParameter")
     textSizeModifier: Modifier = Modifier
@@ -342,8 +359,8 @@ private fun VideofileItem(
             }
         } else {
             val iconBgColor = when {
-                isGuestError == true -> MaterialTheme.colorScheme.error
-                isGuestWarning == true -> MaterialTheme.colorScheme.errorContainer
+                isGuestError == true -> errorColor
+                isGuestWarning == true -> warningColor
                 else -> Color.Unspecified
             }
             Box(
@@ -359,7 +376,7 @@ private fun VideofileItem(
                             text = "X",
                             style = videoNameStyle,
                             fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onError
+                            color = contentColorFor(iconBgColor)
                         )
                     }
                     isGuestWarning == true -> {
@@ -367,7 +384,7 @@ private fun VideofileItem(
                             text = "!",
                             style = videoNameStyle,
                             fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = contentColorFor(iconBgColor)
                         )
                     }
                     else -> {
@@ -421,6 +438,8 @@ fun VideoMatchInfoDialog(
     removeVideoByMetadata: (VideoMetadata) -> Unit,
     addMatchToFilename: (String) -> Unit,
     close: () -> Unit,
+    errorColor: Color = MaterialTheme.colorScheme.error,
+    warningColor: Color = MaterialTheme.colorScheme.errorContainer,
 ) {
     GenericAlertDialog(
         onDismissRequest = {
@@ -432,12 +451,9 @@ fun VideoMatchInfoDialog(
             noFile -> false
             else -> !metadataToCompare!!.equalsByContent(referenceMetadata)
         }
-
-        val errorBgColor = MaterialTheme.colorScheme.error
-        val mismatchBgColor = MaterialTheme.colorScheme.errorContainer
         val titleBgColor = when {
-            noFile -> errorBgColor
-            metadataMismatch -> mismatchBgColor
+            noFile -> errorColor
+            metadataMismatch -> warningColor
             else -> MaterialTheme.colorScheme.primary
         }
         Column {
@@ -497,7 +513,7 @@ fun VideoMatchInfoDialog(
                         }
 
                         val durationMismatch = referenceMetadata.duration != metadataToCompare!!.duration
-                        val durationBgColor = if (durationMismatch) errorBgColor else Color.Unspecified
+                        val durationBgColor = if (durationMismatch) errorColor else Color.Unspecified
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -536,7 +552,7 @@ fun VideoMatchInfoDialog(
                             val h = it.height.roundToInt()
                             "${w}x${h}"
                         }
-                        val resolutionBgColor = if (resolutionMismatch) errorBgColor else Color.Unspecified
+                        val resolutionBgColor = if (resolutionMismatch) errorColor else Color.Unspecified
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -825,3 +841,6 @@ fun videoDurationPrettyString(duration: Long): String {
 
     return "$hoursString$minutesString$secondsString"
 }
+
+@Composable
+fun ColorScheme.isLight() = this.background.luminance() > 0.5
