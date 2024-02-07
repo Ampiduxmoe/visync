@@ -787,7 +787,6 @@ fun DevicesPositionConfigurationEditor(
         }
     }.toMap()
 
-    // TODO: fix vertical position of the video when played if video is bigger
     Dialog(
         onDismissRequest = saveConfigAndCloseEditor,
         properties = DialogProperties(

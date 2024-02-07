@@ -108,9 +108,9 @@ fun VisyncPlayer(
     }
     val (deviceWidth, deviceHeight) = with(LocalDensity.current) {
         physicalDevice.run {
-            val dpWidthFromMm = mmToDp(mmDisplayWidth, density)
-            val dpHeightFromMm = mmToDp(mmDisplayHeight, density)
-            Log.d("Device DPs from MMs", "$dpWidthFromMm x $dpHeightFromMm (density: $density)")
+//            val dpWidthFromMm = mmToDp(mmDisplayWidth, density)
+//            val dpHeightFromMm = mmToDp(mmDisplayHeight, density)
+//            Log.d("Device DPs from MMs", "$dpWidthFromMm x $dpHeightFromMm (density: $density)")
             pxDisplayWidth.toDp() to pxDisplayHeight.toDp()
         }
     }
@@ -137,10 +137,13 @@ fun VisyncPlayer(
             if (videoWidth > deviceWidth) { // if video doesn't fit it is centered (why?)
                 finalOffsetX = (videoWidth - deviceWidth) / 2 + videoOffsetX
             }
-            val finalOffsetY = videoOffsetY
-            Log.d("tag", "offsetX = $finalOffsetX, offsetY = $finalOffsetY")
-            Log.d("tag", "videoWidth = $videoWidth, videoHeight = $videoHeight")
-            Log.d("tag", "deviceWidth = $deviceWidth, deviceHeight = $deviceHeight")
+            var finalOffsetY = videoOffsetY
+            if (videoHeight > deviceHeight) { // if video doesn't fit it is centered (why?)
+                finalOffsetY = (videoHeight - deviceHeight) / 2 + videoOffsetY
+            }
+//            Log.d("tag", "offsetX = $finalOffsetX, offsetY = $finalOffsetY")
+//            Log.d("tag", "videoWidth = $videoWidth, videoHeight = $videoHeight")
+//            Log.d("tag", "deviceWidth = $deviceWidth, deviceHeight = $deviceHeight")
             ExoPlayerComposable(
                 player = player,
                 modifier = Modifier
