@@ -16,6 +16,12 @@
     <string name="desc_video_is_partially_matching">Video you selected partially matches host\'s</string>
     <string name="desc_video_is_missing">No file selected to match this video</string>
     <string name="desc_repeat_icon">Repeat icon</string>
+    <string name="desc_watcher_approved">Watcher will participate in group video playback</string>
+    <string name="desc_watcher_not_approved">Watcher will not participate in group video playback</string>
+    <string name="desc_room_is_visible">This room is visible to everybody</string>
+    <string name="desc_room_is_not_visible">This room is not visible to anybody</string>
+    <string name="desc_device_positions_configuration_editor">Set up devices relative to each other</string>
+    <string name="desc_start_group_playback">Start group playback</string>
     <string name="desc_next_repeat_mode">Select next repeat mode</string>
     <string name="desc_prev_repeat_mode">Select previous repeat mode</string>
     <string name="desc_playback_speed_icon">Playback speed icon</string>
@@ -42,7 +48,7 @@
 
     <string name="tab_label_setup_select_files">Select files</string>
     <string name="tab_label_setup_settings">Playback settings</string>
-    <string name="tab_label_setup_people">People</string>
+    <string name="tab_label_setup_people">Connections</string>
 
     <string name="tab_label_my_profile">Profile</string>
     <string name="tab_label_my_friends">Friends</string>

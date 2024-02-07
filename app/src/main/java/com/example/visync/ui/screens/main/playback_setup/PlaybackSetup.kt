@@ -129,9 +129,8 @@ fun PlaybackSetupGuestScreen(
                         isUserHost = false,
                         isAdvertising = false,
                         hostAsWatcher = hostAsWatcher,
-                        meAsWatcher = meAsWatcher,
-                        notApprovedWatchers = notApprovedWatchers,
-                        approvedWatchers = approvedWatchers,
+                        selfAsWatcher = meAsWatcher,
+                        allWatchers = allWatchers,
                         watcherPings = null,
                         videoMetadata = playbackSetupState.localSelectedVideofiles.firstOrNull()?.metadata,
                         positionsEditor = devicePositionsState,
@@ -157,17 +156,21 @@ fun PlaybackSetupHostScreen(
     positionsEditor: DevicePositionsEditor?,
     play: () -> Unit,
 ) {
+    val allWatchers = playbackSetupState.watchers
     val playbackOptions = playbackSetupState.playbackOptions
-    val hostAsWatcher = hostActions.getPlaybackSetupHostAsWatcher()
-    val meAsWatcher = hostActions.getPlaybackSetupSelfAsWatcher()
-    val otherWatchers = playbackSetupState.watchers
-        .filter { it != hostAsWatcher && it != meAsWatcher }
-    val allWatchers = listOf(
-        listOf(hostAsWatcher, meAsWatcher), otherWatchers
-    ).flatten().toSet()
-    val notApprovedWatchers = allWatchers.filter { !it.isApproved }
-    val approvedWatchers = allWatchers.filter { it.isApproved }
-    val notApprovedWatcherModifier: (Watcher) -> Modifier = { watcher ->
+    val hostWatcherId = hostActions.getPlaybackSetupHostAsWatcher().endpointId
+    val hostAsWatcherQuery = allWatchers.filter { it.endpointId == hostWatcherId }
+    if (hostAsWatcherQuery.isEmpty()) {
+        return
+    }
+    val selfWatcherId = hostActions.getPlaybackSetupSelfAsWatcher().endpointId
+    val selfWatcherQuery = allWatchers.filter { it.endpointId == selfWatcherId }
+    if (selfWatcherQuery.isEmpty()) {
+        return
+    }
+    val hostAsWatcher = hostAsWatcherQuery[0] // TODO: do same in guest setup
+    val meAsWatcher = selfWatcherQuery[0]
+    val notApprovedWatcherModifier: (Watcher) -> Modifier = { watcher -> // TODO: just pass approve and disapprove / toggle instead of this
         when (watcher.canBeApproved) {
             true -> Modifier.clickable { hostActions.approveWatcher(watcher) }
             false -> Modifier
@@ -255,34 +258,32 @@ fun PlaybackSetupHostScreen(
                 enter = enterTransition(),
                 exit = exitTransition()
             ) {
-                Column {
-                    Spacer(modifier = Modifier.height(40.dp))
-                    Text(
-                        text = "start advertising",
-                        modifier = Modifier.clickable { hostActions.startAdvertisingRoom() }
-                    )
-                    Text(
-                        text = "start playback",
-                        modifier = Modifier.clickable { play() }
-                    )
-                    SetupTabPeople(
-                        isUserHost = true,
-                        isAdvertising = hostConnectionState.isAdvertising,
-                        hostAsWatcher = hostAsWatcher,
-                        meAsWatcher = meAsWatcher,
-                        notApprovedWatchers = notApprovedWatchers,
-                        approvedWatchers = approvedWatchers,
-                        watcherPings = hostConnectionState.allWatcherPings,
-                        videoMetadata = playbackSetupState.localSelectedVideofiles.firstOrNull()?.metadata,
-                        positionsEditor = positionsEditor,
-                        saveDevicePositions = hostActions::saveDevicePositions,
-                        sendSyncBall = hostActions::sendSyncBall,
-                        setGuestCallbacks = {},
-                        notApprovedWatcherModifier = notApprovedWatcherModifier,
-                        approvedWatcherModifier = approvedWatcherModifier,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                SetupTabPeople(
+                    isUserHost = true,
+                    isAdvertising = hostConnectionState.isAdvertising,
+                    startAdvertising = { hostActions.startAdvertisingRoom() },
+                    stopAdvertising = { hostActions.stopAdvertisingRoom() },
+                    startGroupPlayback = { play() },
+                    hostAsWatcher = hostAsWatcher,
+                    selfAsWatcher = meAsWatcher,
+                    allWatchers = allWatchers.toList(),
+                    watcherPings = hostConnectionState.allWatcherPings,
+                    videoMetadata = playbackSetupState.localSelectedVideofiles.firstOrNull()?.metadata,
+                    positionsEditor = positionsEditor,
+                    saveDevicePositions = hostActions::saveDevicePositions,
+                    sendSyncBall = hostActions::sendSyncBall,
+                    setGuestCallbacks = {},
+                    notApprovedWatcherModifier = notApprovedWatcherModifier,
+                    approvedWatcherModifier = approvedWatcherModifier,
+                    toggleIsApproved = {
+                        if (it.isApproved) {
+                            hostActions.disapproveWatcher(it)
+                        } else {
+                            hostActions.approveWatcher(it)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     }

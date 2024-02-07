@@ -237,10 +237,18 @@ data class Watcher(
     val messagingVersion: Int?,
     val physicalDevice: VisyncPhysicalDevice?,
     val isApproved: Boolean,
-    val missingVideofileNames: List<String>,
+    val missingVideofileNames: List<String>, // TODO: should be ids, not names since names are not unique
 ) {
     val hasVersionMismatch: Boolean
         get() = messagingVersion != PlaybackSetupMessenger.VERSION
+
+    val hasCompletedHandshake: Boolean
+        get() {
+            val hasMessagingVersion = messagingVersion != null
+            val hasPhysicalDevice = physicalDevice != null
+            return hasMessagingVersion && hasPhysicalDevice
+        }
+
     val canBeApproved: Boolean
         get() {
             val matchesLocalVersion = messagingVersion == PlaybackSetupMessenger.VERSION
@@ -786,7 +794,7 @@ abstract class PlaybackSetupHost(
         )
         messenger.encodeAndSendToWatchers(
             fullMessage = fullMessage,
-            filter = { hasCompletedHandshake() }
+            filter = { hasCompletedHandshake }
         )
     }
 
@@ -1032,12 +1040,12 @@ abstract class PlaybackSetupHost(
         receiversFilter: (Watcher.() -> Boolean)? = null,
     ) {
         val fullMessage = AllWatchersUpdateMessage(
-            allWatchers = allWatchers.filter { it.hasCompletedHandshake() },
+            allWatchers = allWatchers.filter { it.hasCompletedHandshake },
             timestamp = getCurrentTimestamp()
         )
         val finalFilter: (Watcher.() -> Boolean) = when (receiversFilter) {
-            null -> { { hasCompletedHandshake() } }
-            else -> { { hasCompletedHandshake() && receiversFilter() } }
+            null -> { { hasCompletedHandshake } }
+            else -> { { hasCompletedHandshake && receiversFilter() } }
         }
         encodeAndSendToWatchers(
             fullMessage = fullMessage,
@@ -1056,7 +1064,7 @@ abstract class PlaybackSetupHost(
         } else {
             encodeAndSendToWatchers(
                 fullMessage = fullMessage,
-                filter = { hasCompletedHandshake() }
+                filter = { hasCompletedHandshake }
             )
         }
     }
@@ -1096,7 +1104,7 @@ abstract class PlaybackSetupHost(
         val fullMessage = DevicePositionsMessage(positionsEditor!!)
         encodeAndSendToWatchers(
             fullMessage = fullMessage,
-            filter = { hasCompletedHandshake() }
+            filter = { hasCompletedHandshake }
         )
     }
 
@@ -1105,7 +1113,7 @@ abstract class PlaybackSetupHost(
     ) {
         otherWatchers = otherWatchers.filter { it !== watcher }
         _watcherPings = _watcherPings.filter { it.endpointId != watcher.endpointId }
-        if (!watcher.hasCompletedHandshake()) { return }
+        if (!watcher.hasCompletedHandshake) { return }
         restoreConnectionWaitingList.add(
             RestoreConnectionEntry(
                 watcher = watcher,
@@ -1145,12 +1153,6 @@ abstract class PlaybackSetupHost(
                 }
             }
         )
-    }
-
-    fun Watcher.hasCompletedHandshake(): Boolean {
-        val hasMessagingVersion = messagingVersion != null
-        val hasPhysicalDevice = physicalDevice != null
-        return hasMessagingVersion && hasPhysicalDevice
     }
 
     private fun RunningConnection.associatedWatcher(): Watcher? {
@@ -1969,15 +1971,15 @@ data class DevicePositionsEditor(
         color: Long? = null
     ): DevicePositionsEditor {
         val usedColors = devicesOnEditor.map { it.brushColor }
-        val nextColor = color ?: DEFAULT_DEVICE_COLORS.minBy { defaultColor ->
+        val nextColor = color ?: DEFAULT_DEVICE_COLORS.minByOrNull { defaultColor ->
             usedColors.count { it == defaultColor } // least used color
-        }
+        } ?: DEFAULT_DEVICE_COLORS[0]
         val rightmostDevice = devicesOnEditor.maxByOrNull { it.deviceRight }
         val newDevice = DeviceOnEditor(
             watcherInfo = WatcherInfo(watcher),
             brushColor = nextColor,
-            mmOffsetX = (rightmostDevice?.deviceRight ?: 0f) + DEFAULT_DEVICE_GAP,
-            mmOffsetY = (rightmostDevice?.deviceTop ?: 0f),
+            mmOffsetX = (rightmostDevice?.deviceRight ?: (DEFAULT_DEVICE_OFFSET_X - DEFAULT_DEVICE_GAP)) + DEFAULT_DEVICE_GAP,
+            mmOffsetY = (rightmostDevice?.deviceTop ?: DEFAULT_DEVICE_OFFSET_Y),
             mmDeviceWidth = watcher.physicalDevice!!.mmDeviceWidth,
             mmDeviceHeight = watcher.physicalDevice.mmDeviceHeight,
             mmDisplayWidth = watcher.physicalDevice.mmDisplayWidth,
@@ -2013,15 +2015,20 @@ data class DevicePositionsEditor(
             videoMetadata: VideoMetadata,
             deviceColors: List<Long> = DEFAULT_DEVICE_COLORS,
         ): DevicePositionsEditor {
+            val initialOffsetX = DEFAULT_DEVICE_OFFSET_X
+            val initialOffsetY = DEFAULT_DEVICE_OFFSET_Y
             val videoOnEditor = VideoOnEditor(
                 videoMetadata = videoMetadata,
-                mmOffsetX = 0f,
-                mmOffsetY = 0f,
+                mmOffsetX = initialOffsetX * 2,
+                mmOffsetY = initialOffsetY * 2,
                 mmWidth = videoMetadata.width / 10,
                 mmHeight = videoMetadata.height / 10,
             )
             val devicesOnEditor = mutableListOf<DeviceOnEditor>()
-            var prevDevice = DeviceOnEditor.ZeroDimensionsDevice
+            var prevDevice = DeviceOnEditor.ZeroDimensionsDevice.copy(
+                mmOffsetX = initialOffsetX - DEFAULT_DEVICE_GAP,
+                mmOffsetY = initialOffsetY,
+            )
             val colorsCount = deviceColors.count()
             var nextColorIndex = 0
             val nextColor: () -> Long = {
@@ -2034,7 +2041,7 @@ data class DevicePositionsEditor(
                     watcherInfo = WatcherInfo(watcher),
                     brushColor = nextColor(),
                     mmOffsetX = prevDevice.deviceRight + DEFAULT_DEVICE_GAP,
-                    mmOffsetY = 0f,
+                    mmOffsetY = prevDevice.deviceTop,
                     mmDeviceWidth = watcher.physicalDevice!!.mmDeviceWidth,
                     mmDeviceHeight = watcher.physicalDevice.mmDeviceHeight,
                     mmDisplayWidth = watcher.physicalDevice.mmDisplayWidth,
@@ -2055,14 +2062,14 @@ data class DevicePositionsEditor(
             )
         }
 
-        private const val DEFAULT_DEVICE_GAP = 5f
+        private const val DEFAULT_DEVICE_OFFSET_X = 10f
+        private const val DEFAULT_DEVICE_OFFSET_Y = 10f
+        private const val DEFAULT_DEVICE_GAP = 10f
         private val DEFAULT_DEVICE_COLORS = listOf(
             0xFF4cb4f0,
             0xFFff9a00,
             0xFF0b9f57,
-            0xFFb0daec,
-            0xFFffea87,
-            0xFFffcdd7,
+            0xFFba338a,
         )
     }
 }

@@ -629,7 +629,7 @@ fun VideoMatchInfoDialog(
                     ),
                     modifier = Modifier.weight(2f)
                 ) {
-                    Text(text = "Cancel")
+                    Text(text = "Close")
                 }
             }
         }
