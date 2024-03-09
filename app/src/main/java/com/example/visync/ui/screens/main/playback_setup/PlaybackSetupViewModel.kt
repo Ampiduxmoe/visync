@@ -1,8 +1,17 @@
 package com.example.visync.ui.screens.main.playback_setup
 
 import android.app.Application
+import android.content.Context
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.imageResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
@@ -812,10 +821,10 @@ abstract class PlaybackSetupHost(
             positionsEditor = null
         } else {
             positionsEditor = positionsEditor?.withReplacedVideo(
-                videoMetadata = videofiles.first().metadata
+                videofile = videofiles.first()
             ) ?: DevicePositionsEditor.create(
                 watchers = allWatchers.filter { it.isApproved },
-                videoMetadata = videofiles.first().metadata,
+                videofile = videofiles.first(),
             )
         }
         messenger.sendPlaybackOptionsUpdate()
@@ -1997,13 +2006,14 @@ data class DevicePositionsEditor(
         )
     }
 
-    fun withReplacedVideo(videoMetadata: VideoMetadata): DevicePositionsEditor {
+    fun withReplacedVideo(videofile: Videofile): DevicePositionsEditor {
         val newVideoOnEditor = VideoOnEditor(
-            videoMetadata = videoMetadata,
+            videoUri = videofile.uri,
+            videoMetadata = videofile.metadata,
             mmOffsetX = videoOnEditor.mmOffsetX,
             mmOffsetY = videoOnEditor.mmOffsetY,
-            mmWidth = videoMetadata.width / 10,
-            mmHeight = videoMetadata.height / 10,
+            mmWidth = videofile.metadata.width / 10,
+            mmHeight = videofile.metadata.height / 10,
         )
         return copy(
             videoOnEditor = newVideoOnEditor
@@ -2012,17 +2022,18 @@ data class DevicePositionsEditor(
     companion object {
         fun create(
             watchers: List<Watcher>,
-            videoMetadata: VideoMetadata,
+            videofile: Videofile,
             deviceColors: List<Long> = DEFAULT_DEVICE_COLORS,
         ): DevicePositionsEditor {
             val initialOffsetX = DEFAULT_DEVICE_OFFSET_X
             val initialOffsetY = DEFAULT_DEVICE_OFFSET_Y
             val videoOnEditor = VideoOnEditor(
-                videoMetadata = videoMetadata,
+                videoUri = videofile.uri,
+                videoMetadata = videofile.metadata,
                 mmOffsetX = initialOffsetX * 2,
                 mmOffsetY = initialOffsetY * 2,
-                mmWidth = videoMetadata.width / 10,
-                mmHeight = videoMetadata.height / 10,
+                mmWidth = videofile.metadata.width / 10,
+                mmHeight = videofile.metadata.height / 10,
             )
             val devicesOnEditor = mutableListOf<DeviceOnEditor>()
             var prevDevice = DeviceOnEditor.ZeroDimensionsDevice.copy(
@@ -2166,7 +2177,7 @@ data class EditorCameraView(
 }
 
 @Serializable
-data class VideoOnEditor(
+data class VideoOnEditor private constructor(
     val videoMetadata: VideoMetadata,
     val mmOffsetX: Float,
     val mmOffsetY: Float,
@@ -2175,11 +2186,93 @@ data class VideoOnEditor(
     val originalWidth: Float = mmWidth,
     val originalHeight: Float = mmHeight,
 ) {
+    @Transient var uri: Uri = Uri.EMPTY
+        private set
     @Transient val mmLeft = mmOffsetX
     @Transient val mmRight = mmLeft + mmWidth
     @Transient val mmTop = mmOffsetY
     @Transient val mmBottom = mmTop + mmHeight
     @Transient val mmCenter = Offset(x = mmOffsetX + mmWidth / 2, y = mmOffsetY + mmHeight / 2)
+
+    constructor(
+        videoUri: Uri,
+        videoMetadata: VideoMetadata,
+        mmOffsetX: Float,
+        mmOffsetY: Float,
+        mmWidth: Float,
+        mmHeight: Float,
+        originalWidth: Float = mmWidth,
+        originalHeight: Float = mmHeight,
+    ) : this(
+        videoMetadata = videoMetadata,
+        mmOffsetX = mmOffsetX,
+        mmOffsetY = mmOffsetY,
+        mmWidth = mmWidth,
+        mmHeight = mmHeight,
+        originalWidth = originalWidth,
+        originalHeight = originalHeight,
+    ) {
+        this.uri = videoUri
+    }
+
+    fun createThumbnail(context: Context): ImageBitmap {
+        val getPlaceholderImage: () -> ImageBitmap = {
+            val placeholderImageId = R.drawable.doxie_picture
+            ImageBitmap.imageResource(context.resources, placeholderImageId)
+        }
+        if (uri == Uri.EMPTY) {
+            return getPlaceholderImage()
+        }
+        val metadataRetriever = MediaMetadataRetriever()
+        metadataRetriever.setDataSource(context, uri)
+        // "A Bitmap containing a representative video frame" so it should be fine
+        // but in reality it can return really bad frames like full black image when a clearly better choice exists
+        val defaultThumbnail = metadataRetriever.frameAtTime
+        val middleFrame = metadataRetriever.getFrameAtTime(videoMetadata.duration * 1000 / 2)
+        val superDarkThreshold = 0.01f
+        if (defaultThumbnail != null && middleFrame != null) {
+            val defImageLuminance = defaultThumbnail.calculateLuminance()
+            val middleImageLuminance = middleFrame.calculateLuminance()
+            Log.d("Luminance", "defImageLuminance: $defImageLuminance")
+            Log.d("Luminance", "middleImageLuminance: $middleImageLuminance")
+            if (defImageLuminance < superDarkThreshold && middleImageLuminance > defImageLuminance) {
+                return middleFrame.asImageBitmap()
+            }
+        }
+        if (defaultThumbnail != null) {
+        }
+        if (middleFrame != null) {
+        }
+
+        return defaultThumbnail?.asImageBitmap() ?: getPlaceholderImage()
+//        return if (Build.VERSION.SDK_INT >= 29) {
+//            context.contentResolver.loadThumbnail(
+//                uri,
+//                android.util.Size(
+//                    videoMetadata.width.toInt(),
+//                    videoMetadata.height.toInt()
+//                ),
+//                null
+//            ).asImageBitmap()
+//        } else {
+//            ThumbnailUtils.createVideoThumbnail(
+//                uri.path!!,
+//                MediaStore.Images.Thumbnails.FULL_SCREEN_KIND
+//            )?.asImageBitmap() ?: getPlaceholderImage()
+//        }
+    }
+
+    private fun Bitmap.calculateLuminance(): Float {
+        var luminanceSum = 0f
+        for (i in 0..< width) {
+            for (j in 0..< height) {
+                val px = getPixel(i, j)
+                val color = Color(px)
+                luminanceSum += color.luminance()
+            }
+        }
+        return luminanceSum / (width * height)
+    }
 
     fun withAddedOffset(x: Float, y: Float): VideoOnEditor {
         return copy(

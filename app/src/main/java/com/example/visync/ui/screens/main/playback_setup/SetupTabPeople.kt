@@ -6,6 +6,8 @@ import android.graphics.BlurMaskFilter
 import android.graphics.Matrix
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.media.ThumbnailUtils
+import android.net.Uri
 import android.util.Log
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -76,12 +78,14 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
@@ -98,7 +102,9 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.net.toFile
 import com.example.visync.R
+import com.example.visync.data.videofiles.Videofile
 import com.example.visync.messaging.SyncBallMessage
 import com.example.visync.metadata.VideoMetadata
 import com.example.visync.ui.components.navigation.GenericAlertDialog
@@ -110,7 +116,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 import java.lang.IllegalArgumentException
+import java.net.URI
 import kotlin.math.absoluteValue
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -678,11 +686,16 @@ fun DevicesPositionConfigurationEditor(
         saveDevicePositions(DevicePositionsEditor(video, devices, camera))
         closeEditor()
     }
-
-    val videoImage = ImageBitmap.imageResource(id = R.drawable.doxie_picture)
-    val videoImageShader = remember {
+    val context = LocalContext.current
+    val videoThumbnail = remember(video.uri) {
+        /* TODO: since it takes quite a lot of time to generate good thumbnail,
+            start generating it inside a coroutine when user selects a file
+        */
+        video.createThumbnail(context)
+    }
+    val videoThumbnailShader = remember(video.uri) {
         ImageShader(
-            image = videoImage,
+            image = videoThumbnail,
             tileModeX = TileMode.Mirror,
             tileModeY = TileMode.Mirror,
         )
@@ -698,23 +711,23 @@ fun DevicesPositionConfigurationEditor(
             y = mmToPx(video.mmOffsetY - camera.mmViewOffsetY),
         )
     }
-    val dogPictureScale = remember(video, camera.zoom) {
+    val videoThumbnailScale = remember(video, camera.zoom) {
         val videoOnCanvasWidth = mmToPx(video.mmWidth)
         val videoOnCanvasHeight = mmToPx(video.mmHeight)
-        val scaleToFitWidth = videoOnCanvasWidth / videoImage.width
-        val scaleToFitHeight = videoOnCanvasHeight / videoImage.height
+        val scaleToFitWidth = videoOnCanvasWidth / videoThumbnail.width
+        val scaleToFitHeight = videoOnCanvasHeight / videoThumbnail.height
         min(scaleToFitWidth, scaleToFitHeight)
     }
-    val dogPictureMatrix = remember(videoOffset.x, videoOffset.y, dogPictureScale) {
+    val videoThumbnailMatrix = remember(videoOffset.x, videoOffset.y, videoThumbnailScale) {
         val m = Matrix()
         m.preTranslate(videoOffset.x, videoOffset.y)
-        m.postScale(dogPictureScale, dogPictureScale, videoOffset.x, videoOffset.y)
+        m.postScale(videoThumbnailScale, videoThumbnailScale, videoOffset.x, videoOffset.y)
         m
     }
-    videoImageShader.setLocalMatrix(dogPictureMatrix)
-    val dogPictureBrush = remember {
+    videoThumbnailShader.setLocalMatrix(videoThumbnailMatrix)
+    val videoThumbnailBrush = remember {
         ShaderBrush(
-            videoImageShader
+            videoThumbnailShader
         )
     }
 
@@ -908,7 +921,7 @@ fun DevicesPositionConfigurationEditor(
                             blur = shadowSpread * 4,
                         )
                         drawRect(
-                            brush = dogPictureBrush,
+                            brush = videoThumbnailBrush,
                             topLeft = videoTopLeft,
                             size = videoSize,
                         )
@@ -1284,9 +1297,13 @@ class Steps(
 fun SetupTabPeoplePreview() {
     val watchers = getManyFakeWatchers()
     val videoMetadata = getFakeVideoMetadata("MyVideo.mp4")
+    val videofile = Videofile(
+        uri = Uri.EMPTY,
+        metadata = videoMetadata
+    )
     val editor = DevicePositionsEditor.create(
         watchers = watchers.filter { it.isApproved },
-        videoMetadata = videoMetadata
+        videofile = videofile
     )
     suspend fun fakeSuspendFun(one: Offset, two: Offset) {}
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -1745,9 +1762,13 @@ fun DevicesPositionConfigurationEditorPreview() {
         )
     }
     val videoMetadata = getFakeVideoMetadata("MyVideo.mp4")
+    val videofile = Videofile(
+        uri = Uri.EMPTY,
+        metadata = videoMetadata
+    )
     val baseEditor = DevicePositionsEditor.create(
         watchers = watchers.filter { it.isApproved },
-        videoMetadata = videoMetadata
+        videofile = videofile
     )
     val editor = baseEditor.copy(
         cameraView = baseEditor.cameraView.zoomedTo(
