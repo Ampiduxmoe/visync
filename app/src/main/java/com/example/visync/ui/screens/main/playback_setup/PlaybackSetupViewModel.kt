@@ -7,10 +7,8 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.imageResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -47,14 +45,18 @@ import com.example.visync.messaging.SyncBallMessage
 import com.example.visync.messaging.VisyncMessage
 import com.example.visync.messaging.YourOwnEndpointIdMessage
 import com.example.visync.metadata.VideoMetadata
+import com.example.visync.primitives.VisyncColor
 import com.example.visync.ui.screens.main.playback_setup.PingEntry.Companion.ZeroPingEntry
 import com.example.visync.ui.screens.player.VisyncPhysicalDevice
 import com.google.android.gms.nearby.connection.ConnectionResolution
 import com.google.android.gms.nearby.connection.ConnectionsStatusCodes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -2215,63 +2217,94 @@ data class VideoOnEditor private constructor(
         this.uri = videoUri
     }
 
-    fun createThumbnail(context: Context): ImageBitmap {
+    suspend fun createThumbnail(context: Context): ImageBitmap = coroutineScope {
         val getPlaceholderImage: () -> ImageBitmap = {
             val placeholderImageId = R.drawable.doxie_picture
             ImageBitmap.imageResource(context.resources, placeholderImageId)
         }
         if (uri == Uri.EMPTY) {
-            return getPlaceholderImage()
+            return@coroutineScope getPlaceholderImage()
         }
         val metadataRetriever = MediaMetadataRetriever()
         metadataRetriever.setDataSource(context, uri)
+
         // "A Bitmap containing a representative video frame" so it should be fine
         // but in reality it can return really bad frames like full black image when a clearly better choice exists
         val defaultThumbnail = metadataRetriever.frameAtTime
+
+        // get additional frames that could be better
         val middleFrame = metadataRetriever.getFrameAtTime(videoMetadata.duration * 1000 / 2)
+
         val superDarkThreshold = 0.01f
+
         if (defaultThumbnail != null && middleFrame != null) {
-            val defImageLuminance = defaultThumbnail.calculateLuminance()
-            val middleImageLuminance = middleFrame.calculateLuminance()
+            Log.d("Luminance", "started calculations...")
+            val defImageLuminanceJob = async { defaultThumbnail.calculateLuminance() }
+            val middleImageLuminanceJob = async { middleFrame.calculateLuminance() }
+            val defImageLuminance = defImageLuminanceJob.await()
+            val middleImageLuminance = middleImageLuminanceJob.await()
             Log.d("Luminance", "defImageLuminance: $defImageLuminance")
             Log.d("Luminance", "middleImageLuminance: $middleImageLuminance")
             if (defImageLuminance < superDarkThreshold && middleImageLuminance > defImageLuminance) {
-                return middleFrame.asImageBitmap()
+                return@coroutineScope middleFrame.asImageBitmap()
             }
         }
-        if (defaultThumbnail != null) {
+        return@coroutineScope defaultThumbnail?.asImageBitmap() ?: getPlaceholderImage()
+    }
+
+    // seems like use of coroutines on Dispatchers.Default doesn't save any computation time,
+    // at least not on ZB631KL when processing FHD video
+    private suspend fun Bitmap.calculateLuminanceWithCoroutines(): Float = coroutineScope {
+        val jobCount = 8
+        val pixelCount = width * height
+        val pixelsPerJob = pixelCount / jobCount
+        val allPixels = IntArray(size = pixelCount)
+        getPixels(allPixels, 0, width, 0, 0, width, height)
+        val calculatePartialLuminance: (Int, Int) -> Double = { fromPixel, toPixel ->
+            var localSum = 0.0
+            for (i in fromPixel ..< toPixel) {
+                val px = allPixels[i]
+                val r = VisyncColor.SRGB_TO_LINEAR_RGB_LOOKUP_TABLE[(px shr 16) and 255]
+                val g = VisyncColor.SRGB_TO_LINEAR_RGB_LOOKUP_TABLE[(px shr 8) and 255]
+                val b = VisyncColor.SRGB_TO_LINEAR_RGB_LOOKUP_TABLE[(px) and 255]
+                localSum += 0.2126 * r + 0.7152 * g + 0.0722 * b
+            }
+            localSum
         }
-        if (middleFrame != null) {
+        val jobResults = (0 ..< jobCount).map { jobIndex ->
+            val isLastJob = jobIndex == jobCount - 1
+            val startPx = pixelsPerJob * jobIndex
+            if (isLastJob) {
+                return@map async(Dispatchers.Default) {
+                    return@async calculatePartialLuminance(startPx, pixelCount)
+                }
+            }
+            return@map async(Dispatchers.Default) {
+                val endPx = startPx + pixelsPerJob
+                return@async calculatePartialLuminance(startPx, endPx)
+            }
         }
 
-        return defaultThumbnail?.asImageBitmap() ?: getPlaceholderImage()
-//        return if (Build.VERSION.SDK_INT >= 29) {
-//            context.contentResolver.loadThumbnail(
-//                uri,
-//                android.util.Size(
-//                    videoMetadata.width.toInt(),
-//                    videoMetadata.height.toInt()
-//                ),
-//                null
-//            ).asImageBitmap()
-//        } else {
-//            ThumbnailUtils.createVideoThumbnail(
-//                uri.path!!,
-//                MediaStore.Images.Thumbnails.FULL_SCREEN_KIND
-//            )?.asImageBitmap() ?: getPlaceholderImage()
-//        }
+        val luminanceSum = jobResults.sumOf { it.await() }
+        return@coroutineScope (luminanceSum / pixelCount).toFloat()
     }
 
     private fun Bitmap.calculateLuminance(): Float {
-        var luminanceSum = 0f
-        for (i in 0..< width) {
-            for (j in 0..< height) {
-                val px = getPixel(i, j)
-                val color = Color(px)
-                luminanceSum += color.luminance()
-            }
+        var luminanceSum = 0.0
+        val allPixels = IntArray(size = width * height)
+        // 2. using getPixels instead of getPixel(i, j)
+        //    reduces computation time from ~1s to ~0.2s (device: ZB631KL)
+        getPixels(allPixels, 0, width, 0, 0, width, height)
+        for (px in allPixels) {
+            // 1. calculating luminance manually instead of
+            //    constructing Color(px) and calling .luminance
+            //    reduces computation time from ~3s to ~1s (device: ZB631KL)
+            val r = VisyncColor.SRGB_TO_LINEAR_RGB_LOOKUP_TABLE[(px shr 16) and 255]
+            val g = VisyncColor.SRGB_TO_LINEAR_RGB_LOOKUP_TABLE[(px shr 8) and 255]
+            val b = VisyncColor.SRGB_TO_LINEAR_RGB_LOOKUP_TABLE[(px) and 255]
+            luminanceSum += 0.2126 * r + 0.7152 * g + 0.0722 * b
         }
-        return luminanceSum / (width * height)
+        return (luminanceSum / (width * height)).toFloat()
     }
 
     fun withAddedOffset(x: Float, y: Float): VideoOnEditor {

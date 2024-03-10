@@ -6,7 +6,6 @@ import android.graphics.BlurMaskFilter
 import android.graphics.Matrix
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
-import android.media.ThumbnailUtils
 import android.net.Uri
 import android.util.Log
 import androidx.compose.animation.core.LinearEasing
@@ -70,6 +69,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.Paint
@@ -78,18 +78,22 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -102,7 +106,6 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.core.net.toFile
 import com.example.visync.R
 import com.example.visync.data.videofiles.Videofile
 import com.example.visync.messaging.SyncBallMessage
@@ -116,9 +119,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.File
 import java.lang.IllegalArgumentException
-import java.net.URI
 import kotlin.math.absoluteValue
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -687,18 +688,27 @@ fun DevicesPositionConfigurationEditor(
         closeEditor()
     }
     val context = LocalContext.current
-    val videoThumbnail = remember(video.uri) {
-        /* TODO: since it takes quite a lot of time to generate good thumbnail,
-            start generating it inside a coroutine when user selects a file
-        */
-        video.createThumbnail(context)
+    val loadingIcon = ImageVector.vectorResource(R.drawable.ic_cut_circle)
+    val loadingIconPainter = rememberVectorPainter(image = loadingIcon)
+    var videoThumbnail by remember {
+        mutableStateOf(ImageBitmap.imageResource(context.resources, R.drawable.black_square))
     }
-    val videoThumbnailShader = remember(video.uri) {
-        ImageShader(
+    val infiniteTransition = rememberInfiniteTransition(
+        label = "loadingInProgressRotationAngle"
+    )
+    val loadingAnimationRotationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = LinearEasing)
+        ), label = "loadingInProgressRotationAngle"
+    )
+    var videoThumbnailShader by remember {
+        mutableStateOf(ImageShader(
             image = videoThumbnail,
             tileModeX = TileMode.Mirror,
             tileModeY = TileMode.Mirror,
-        )
+        ))
     }
     val videoOffset = remember(
         video.mmOffsetX,
@@ -711,7 +721,12 @@ fun DevicesPositionConfigurationEditor(
             y = mmToPx(video.mmOffsetY - camera.mmViewOffsetY),
         )
     }
-    val videoThumbnailScale = remember(video, camera.zoom) {
+    val videoThumbnailScale = remember(
+        video,
+        camera.zoom,
+        videoThumbnail.width,
+        videoThumbnail.height
+    ) {
         val videoOnCanvasWidth = mmToPx(video.mmWidth)
         val videoOnCanvasHeight = mmToPx(video.mmHeight)
         val scaleToFitWidth = videoOnCanvasWidth / videoThumbnail.width
@@ -722,13 +737,28 @@ fun DevicesPositionConfigurationEditor(
         val m = Matrix()
         m.preTranslate(videoOffset.x, videoOffset.y)
         m.postScale(videoThumbnailScale, videoThumbnailScale, videoOffset.x, videoOffset.y)
+        videoThumbnailShader.setLocalMatrix(m)
         m
     }
-    videoThumbnailShader.setLocalMatrix(videoThumbnailMatrix)
-    val videoThumbnailBrush = remember {
-        ShaderBrush(
+    var videoThumbnailBrush by remember {
+        mutableStateOf(ShaderBrush(
             videoThumbnailShader
-        )
+        ))
+    }
+    var isThumbnailLoading by remember { mutableStateOf(false) }
+    LaunchedEffect(video.uri) {
+        launch(Dispatchers.Default) {
+            isThumbnailLoading = true
+            videoThumbnail = video.createThumbnail(context)
+            videoThumbnailShader = ImageShader(
+                image = videoThumbnail,
+                tileModeX = TileMode.Mirror,
+                tileModeY = TileMode.Mirror,
+            )
+            videoThumbnailShader.setLocalMatrix(videoThumbnailMatrix)
+            videoThumbnailBrush = ShaderBrush(videoThumbnailShader)
+            isThumbnailLoading = false
+        }
     }
 
     val backgroundTileImage = ImageBitmap.imageResource(id = R.drawable.stripes_tile)
@@ -925,6 +955,31 @@ fun DevicesPositionConfigurationEditor(
                             topLeft = videoTopLeft,
                             size = videoSize,
                         )
+                        val loadingIconDimension = videoSize.minDimension / 3
+                        val loadingIconTopLeft = Offset(
+                            x = videoTopLeft.x + videoSize.width / 2 - loadingIconDimension / 2,
+                            y = videoTopLeft.y + videoSize.height / 2 - loadingIconDimension / 2,
+                        )
+                        val loadingIconSize = Size(
+                            width = loadingIconDimension,
+                            height = loadingIconDimension,
+                        )
+                        val rotationPivotPoint = Offset(
+                            x = loadingIconSize.width / 2,
+                            y = loadingIconSize.height / 2,
+                        )
+                        if (isThumbnailLoading) {
+                            translate(left = loadingIconTopLeft.x, top = loadingIconTopLeft.y) {
+                                rotate(degrees = loadingAnimationRotationAngle, pivot = rotationPivotPoint) {
+                                    with(loadingIconPainter) {
+                                        draw(
+                                            size = loadingIconSize,
+                                            colorFilter = ColorFilter.tint(Color.White),
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         if (isVideoSelected) {
                             val videoBlurSpread = videoSize.minDimension / 4
                             drawInnerShadow(
