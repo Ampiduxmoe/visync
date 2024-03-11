@@ -31,13 +31,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
@@ -838,7 +839,7 @@ fun DevicesPositionConfigurationEditor(
     ) {
         Surface(
             modifier = Modifier
-                .requiredSize(editorWidth, editorHeight)
+                .fillMaxSize()
         ) {
             Canvas(
                 modifier = Modifier
@@ -974,6 +975,7 @@ fun DevicesPositionConfigurationEditor(
                                     with(loadingIconPainter) {
                                         draw(
                                             size = loadingIconSize,
+                                            alpha = 0.67f,
                                             colorFilter = ColorFilter.tint(Color.White),
                                         )
                                     }
@@ -990,37 +992,8 @@ fun DevicesPositionConfigurationEditor(
                                 spread = videoBlurSpread,
                                 blur = videoBlurSpread * 2,
                             )
-//                            drawRect(
-//                                color = selectionColor,
-//                                topLeft = Offset(
-//                                    x = mmToPx(it.mmOffsetX - mmCameraPosX),
-//                                    y = mmToPx(it.mmOffsetY - mmCameraPosY)
-//                                ),
-//                                size = Size(
-//                                    width = mmToPx(it.mmWidth),
-//                                    height = mmToPx(it.mmHeight)
-//                                ),
-//                                alpha = selectionAlpha,
-//                                style = Stroke(width = selectionStrokeWidth),
-//                            )
                         }
                     }
-//                with(drawContext.canvas.nativeCanvas) {
-//                    val checkPoint = saveLayer(null, null)
-//                    val offset = Offset(100f, 100f)
-//                    drawCircle(
-//                        center = center + offset,
-//                        color = Color.Red,
-//                        radius = 100f,
-//                    )
-//                    drawRect(
-//                        topLeft = center + offset,
-//                        color = Color.Blue,
-//                        size = Size(100f, 100f),
-//                        blendMode = BlendMode.DstOut
-//                    )
-//                    restoreToCount(checkPoint)
-//                }
                     devices.forEach {
                         val deviceColor = Color(it.brushColor)
 
@@ -1092,14 +1065,6 @@ fun DevicesPositionConfigurationEditor(
                                 ),
                                 blendMode = BlendMode.DstOut
                             )
-//                            drawText(
-//                                textMeasurer = textMeasurer,
-//                                text = it.watcherInfo.endpointId,
-//                                style = endpointIdStyle,
-//                                topLeft = deviceTopLeft + halfDeviceSize - halfTextSize,
-//                                size = deviceSize,
-//                                blendMode = BlendMode.DstOut
-//                            )
                         }
                         drawText(
                             textMeasurer = textMeasurer,
@@ -1109,14 +1074,6 @@ fun DevicesPositionConfigurationEditor(
                             size = deviceSize,
                             blendMode = BlendMode.Overlay
                         )
-//                        drawInnerShadow(
-//                            color = selectionColor,
-//                            offset = deviceTopLeft,
-//                            size = deviceSize,
-//                            cornerRadius = deviceCornerRadius,
-//                            spread = selectionStrokeWidth,
-//                            blur = selectionStrokeWidth * 2,
-//                        )
                         if (it in selectedDevices) {
                             drawInnerShadow(
                                 color = selectionColor,
@@ -1126,108 +1083,228 @@ fun DevicesPositionConfigurationEditor(
                                 spread = selectionStrokeWidth,
                                 blur = selectionStrokeWidth * 2,
                             )
-//                            drawRoundRect(
-//                                color = selectionColor,
-//                                topLeft = Offset(
-//                                    x = mmToPx(it.mmOffsetX - mmCameraPosX),
-//                                    y = mmToPx(it.mmOffsetY - mmCameraPosY)
-//                                ),
-//                                size = Size(
-//                                    width = mmToPx(it.mmDeviceWidth),
-//                                    height = mmToPx(it.mmDeviceHeight)
-//                                ),
-//                                alpha = selectionAlpha,
-//                                style = Stroke(width = selectionStrokeWidth),
-//                                cornerRadius = CornerRadius(
-//                                    deviceCornerRadius,
-//                                    deviceCornerRadius
-//                                ),
-//                            )
                         }
                     }
                 }
-//                mmPointerOnEditor.let {
-//                    val pointerWidth = mmToPx(25f / camera.zoom)
-//                    val pointerHeight = mmToPx(25f / camera.zoom)
-//                    drawRect(
-//                        color = Color.Magenta,
-//                        topLeft = Offset(
-//                            x = mmToPx(it.x - mmCameraPosX) - pointerWidth / 2,
-//                            y = mmToPx(it.y - mmCameraPosY) - pointerHeight / 2
-//                        ),
-//                        size = Size(
-//                            width = pointerWidth,
-//                            height = pointerHeight
-//                        ),
-//                        alpha = 0.5f,
-//                        style = Fill,
-//                    )
-//                }
-//                truePointerPos.let {
-//                    drawCircle(
-//                        color = Color.Magenta,
-//                        radius = 50f,
-//                        center = it,
-//                        alpha = 0.5f,
-//                        style = Fill,
-//                    )
-//                }
-//                Offset(x=0f, y=pxEditorHeight/2).let { left ->
-//                    drawCircle(
-//                        color = Color.Green,
-//                        radius = 50f,
-//                        center = left,
-//                        alpha = 0.5f,
-//                        style = Fill,
-//                    )
-//                }
-//                Offset(x=pxEditorWidth/2, y=pxEditorHeight/2).let { center ->
-//                    drawCircle(
-//                        color = Color.Green,
-//                        radius = 50f,
-//                        center = center,
-//                        alpha = 0.5f,
-//                        style = Fill,
-//                    )
-//                }
-//                Offset(x=pxEditorWidth, y=pxEditorHeight/2).let { right ->
-//                    drawCircle(
-//                        color = Color.Green,
-//                        radius = 50f,
-//                        center = right,
-//                        alpha = 0.5f,
-//                        style = Fill,
-//                    )
-//                }
+                val drawDebug = false
+                if (drawDebug) {
+                    mmPointerOnEditor.let {
+                        val pointerWidth = mmToPx(25f / camera.zoom)
+                        val pointerHeight = mmToPx(25f / camera.zoom)
+                        drawRect(
+                            color = Color.Magenta,
+                            topLeft = Offset(
+                                x = mmToPx(it.x - mmCameraPosX) - pointerWidth / 2,
+                                y = mmToPx(it.y - mmCameraPosY) - pointerHeight / 2
+                            ),
+                            size = Size(
+                                width = pointerWidth,
+                                height = pointerHeight
+                            ),
+                            alpha = 0.5f,
+                            style = Fill,
+                        )
+                    }
+                    truePointerPos.let {
+                        drawCircle(
+                            color = Color.Magenta,
+                            radius = 50f,
+                            center = it,
+                            alpha = 0.5f,
+                            style = Fill,
+                        )
+                    }
+                    Offset(x=0f, y=pxEditorHeight/2).let { left ->
+                        drawCircle(
+                            color = Color.Green,
+                            radius = 50f,
+                            center = left,
+                            alpha = 0.5f,
+                            style = Fill,
+                        )
+                    }
+                    Offset(x=pxEditorWidth/2, y=pxEditorHeight/2).let { center ->
+                        drawCircle(
+                            color = Color.Green,
+                            radius = 50f,
+                            center = center,
+                            alpha = 0.5f,
+                            style = Fill,
+                        )
+                    }
+                    Offset(x=pxEditorWidth, y=pxEditorHeight/2).let { right ->
+                        drawCircle(
+                            color = Color.Green,
+                            radius = 50f,
+                            center = right,
+                            alpha = 0.5f,
+                            style = Fill,
+                        )
+                    }
+                }
             }
+            val bgColor = Color.Black
+            val contentColor = Color.White
+            val iconSize = 52.dp
+            var currentDialog by remember { mutableStateOf(ConfigurationEditorDialogs.NONE) }
             Column(
                 modifier = Modifier.fillMaxSize()
             ) {
-                if (isVideoSelected) {
-                    val resString = "${video.videoMetadata.width}x${video.videoMetadata.height}"
-                    val mmString = "${video.mmWidth}mm x ${video.mmHeight}mm"
-                    Text(
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                        text = "${video.videoMetadata.filename} [$resString] [$mmString]",
-                    )
-                }
-                selectedDevicesWatcherInfo.forEach { watcherInfo ->
-                    Text(
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center,
-                        text = "${watcherInfo.username} [${watcherInfo.endpointId}]",
-                    )
+                val isAnythingSelected = isVideoSelected || selectedDevicesWatcherInfo.isNotEmpty()
+                if (isAnythingSelected && currentDialog == ConfigurationEditorDialogs.NONE) {
+                    Column(
+                        modifier = Modifier
+                            .background(bgColor)
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                    ) {
+                        var selectionIndex = 1
+                        var selectionString = ""
+                        if (isVideoSelected) {
+                            selectionString += video.videoMetadata.filename
+                            selectionIndex++
+                        }
+                        selectedDevicesWatcherInfo.forEach { watcherInfo ->
+                            selectionString += when (selectionIndex) {
+                                1 -> watcherInfo.username
+                                else -> ", ${watcherInfo.username}"
+                            }
+                            selectionIndex++
+                        }
+                        Text(
+                            modifier = Modifier.fillMaxWidth(),
+                            text = "Selected:",
+                            color = contentColor,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            modifier = Modifier.fillMaxWidth(),
+                            text = selectionString,
+                            color = contentColor,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                Row(
-                    modifier = Modifier
-                ) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    TextButton(
-                        onClick = saveConfigAndCloseEditor
+                if (currentDialog == ConfigurationEditorDialogs.HELP) {
+                    Column(
+                        modifier = Modifier
+                            .background(bgColor)
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
                     ) {
-                        Text("Confirm")
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                modifier = Modifier.weight(1f),
+                                text = "Help",
+                                color = contentColor,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(iconSize * 0.67f)
+                                    .clip(shape = CircleShape)
+                                    .background(contentColor)
+                                    .clickable { currentDialog = ConfigurationEditorDialogs.NONE }
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_close),
+                                    contentDescription = stringResource(id = R.string.desc_configuration_close_icon),
+                                    tint = bgColor,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            modifier = Modifier.fillMaxWidth(),
+                            text = "Hello this is device configuration editor here you can configure devices :)", // TODO
+                            color = contentColor,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                if (currentDialog == ConfigurationEditorDialogs.INFO) {
+                    Column(
+                        modifier = Modifier
+                            .background(bgColor)
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                modifier = Modifier.weight(1f),
+                                text = "Information",
+                                color = contentColor,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(iconSize * 0.67f)
+                                    .clip(shape = CircleShape)
+                                    .background(contentColor)
+                                    .clickable { currentDialog = ConfigurationEditorDialogs.NONE }
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_close),
+                                    contentDescription = stringResource(id = R.string.desc_configuration_close_icon),
+                                    tint = bgColor,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            modifier = Modifier.fillMaxWidth(),
+                            text = "Hello this is device information here's your information:", // TODO
+                            color = contentColor,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+                if (currentDialog == ConfigurationEditorDialogs.SETTINGS) {
+                    Column(
+                        modifier = Modifier
+                            .background(bgColor)
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                modifier = Modifier.weight(1f),
+                                text = "Settings",
+                                color = contentColor,
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(iconSize * 0.67f)
+                                    .clip(shape = CircleShape)
+                                    .background(contentColor)
+                                    .clickable { currentDialog = ConfigurationEditorDialogs.NONE }
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_close),
+                                    contentDescription = stringResource(id = R.string.desc_configuration_close_icon),
+                                    tint = bgColor,
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            modifier = Modifier.fillMaxWidth(),
+                            text = "Hello this is settings here you can finetune your config :)", // TODO
+                            color = contentColor,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
@@ -1235,52 +1312,117 @@ fun DevicesPositionConfigurationEditor(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Spacer(modifier = Modifier.weight(1f))
-                Column(
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(0.1f)
-                        .alpha(0.5f)
-                        .background(Color.White)
-                ) {
-                    val mmCenter = Offset(
-                        x = pxToMm(pxEditorWidth / 2) + camera.mmViewOffsetX,
-                        y = pxToMm(pxEditorHeight / 2) + camera.mmViewOffsetY
-                    )
-                    val zoomSteps = remember { Steps(listOf(
-                        0.5f, 0.6f, 0.7f, 0.8f, 0.9f,
-                        1.0f,
-                        1.2f, 1.4f, 1.6f, 1.8f, 2.0f
-                    )) }
-                    Text(
-                        text = "+",
-                        fontWeight = FontWeight.ExtraBold,
+                if (currentDialog == ConfigurationEditorDialogs.NONE) {
+                    Column(
+                        verticalArrangement = Arrangement.Bottom,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .clickable {
-                                mmPointerOnEditor = mmCenter
-                                camera = camera.zoomedTo(
-                                    targetZoom = zoomSteps.nextToClosestStep(camera.zoom),
-                                    mmPivotPoint = mmCenter
+                            .fillMaxHeight()
+                            .padding(12.dp)
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(iconSize)
+                                .clip(shape = CircleShape)
+                                .background(bgColor)
+                                .clickable { currentDialog = ConfigurationEditorDialogs.HELP }
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_question_mark),
+                                contentDescription = stringResource(id = R.string.desc_configuration_help_icon),
+                                tint = contentColor,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(iconSize)
+                                .clip(shape = CircleShape)
+                                .background(bgColor)
+                                .clickable { currentDialog = ConfigurationEditorDialogs.INFO }
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_info_mark),
+                                contentDescription = stringResource(id = R.string.desc_configuration_info_icon),
+                                tint = contentColor,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(iconSize)
+                                .clip(shape = CircleShape)
+                                .background(bgColor)
+                                .clickable { currentDialog = ConfigurationEditorDialogs.SETTINGS }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = stringResource(id = R.string.desc_configuration_settings_icon),
+                                tint = contentColor,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier
+                                .size(iconSize)
+                                .clip(shape = CircleShape)
+                                .background(bgColor)
+                                .clickable { saveConfigAndCloseEditor() }
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_check),
+                                contentDescription = stringResource(id = R.string.desc_configuration_save_icon),
+                                tint = contentColor,
+                            )
+                        }
+                        if (false) {
+                            val mmCenter = Offset(
+                                x = pxToMm(pxEditorWidth / 2) + camera.mmViewOffsetX,
+                                y = pxToMm(pxEditorHeight / 2) + camera.mmViewOffsetY
+                            )
+                            val zoomSteps = remember {
+                                Steps(
+                                    listOf(
+                                        0.5f, 0.6f, 0.7f, 0.8f, 0.9f,
+                                        1.0f,
+                                        1.2f, 1.4f, 1.6f, 1.8f, 2.0f
+                                    )
                                 )
                             }
-                    )
-                    Text(
-                        text = String.format("%.1f", camera.zoom),
-                        modifier = Modifier
-                    )
-                    Text(
-                        text = "-",
-                        fontWeight = FontWeight.ExtraBold,
-                        modifier = Modifier
-                            .clickable {
-                                mmPointerOnEditor = mmCenter
-                                camera = camera.zoomedTo(
-                                    targetZoom = zoomSteps.prevToClosestStep(camera.zoom),
-                                    mmPivotPoint = mmCenter
-                                )
-                            }
-                    )
+                            Text(
+                                text = "+",
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier
+                                    .clickable {
+                                        mmPointerOnEditor = mmCenter
+                                        camera = camera.zoomedTo(
+                                            targetZoom = zoomSteps.nextToClosestStep(camera.zoom),
+                                            mmPivotPoint = mmCenter
+                                        )
+                                    }
+                            )
+                            Text(
+                                text = String.format("%.1f", camera.zoom),
+                                modifier = Modifier
+                            )
+                            Text(
+                                text = "-",
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier
+                                    .clickable {
+                                        mmPointerOnEditor = mmCenter
+                                        camera = camera.zoomedTo(
+                                            targetZoom = zoomSteps.prevToClosestStep(camera.zoom),
+                                            mmPivotPoint = mmCenter
+                                        )
+                                    }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1952,4 +2094,8 @@ fun DrawScope.drawShadow(
         frameworkPaint.xfermode = null
         it.restore()
     }
+}
+
+enum class ConfigurationEditorDialogs {
+    NONE, HELP, INFO, SETTINGS
 }
