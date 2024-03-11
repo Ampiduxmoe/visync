@@ -746,7 +746,7 @@ fun DevicesPositionConfigurationEditor(
         ))
     }
     var isThumbnailLoading by remember { mutableStateOf(false) }
-    LaunchedEffect(video.uri) {
+    LaunchedEffect(video.videoUri) {
         launch(Dispatchers.Default) {
             isThumbnailLoading = true
             videoThumbnail = video.createThumbnail(context)

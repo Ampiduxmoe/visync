@@ -2179,7 +2179,11 @@ data class EditorCameraView(
 }
 
 @Serializable
-data class VideoOnEditor private constructor(
+data class VideoOnEditor(
+    /* TODO: guest should construct own VideoOnEditor
+        when they receive device configuration from host
+        to not break thumbnails */
+    @Transient val videoUri: Uri = Uri.EMPTY,
     val videoMetadata: VideoMetadata,
     val mmOffsetX: Float,
     val mmOffsetY: Float,
@@ -2188,45 +2192,22 @@ data class VideoOnEditor private constructor(
     val originalWidth: Float = mmWidth,
     val originalHeight: Float = mmHeight,
 ) {
-    @Transient var uri: Uri = Uri.EMPTY
-        private set
     @Transient val mmLeft = mmOffsetX
     @Transient val mmRight = mmLeft + mmWidth
     @Transient val mmTop = mmOffsetY
     @Transient val mmBottom = mmTop + mmHeight
     @Transient val mmCenter = Offset(x = mmOffsetX + mmWidth / 2, y = mmOffsetY + mmHeight / 2)
 
-    constructor(
-        videoUri: Uri,
-        videoMetadata: VideoMetadata,
-        mmOffsetX: Float,
-        mmOffsetY: Float,
-        mmWidth: Float,
-        mmHeight: Float,
-        originalWidth: Float = mmWidth,
-        originalHeight: Float = mmHeight,
-    ) : this(
-        videoMetadata = videoMetadata,
-        mmOffsetX = mmOffsetX,
-        mmOffsetY = mmOffsetY,
-        mmWidth = mmWidth,
-        mmHeight = mmHeight,
-        originalWidth = originalWidth,
-        originalHeight = originalHeight,
-    ) {
-        this.uri = videoUri
-    }
-
     suspend fun createThumbnail(context: Context): ImageBitmap = coroutineScope {
         val getPlaceholderImage: () -> ImageBitmap = {
             val placeholderImageId = R.drawable.doxie_picture
             ImageBitmap.imageResource(context.resources, placeholderImageId)
         }
-        if (uri == Uri.EMPTY) {
+        if (videoUri == Uri.EMPTY) {
             return@coroutineScope getPlaceholderImage()
         }
         val metadataRetriever = MediaMetadataRetriever()
-        metadataRetriever.setDataSource(context, uri)
+        metadataRetriever.setDataSource(context, videoUri)
 
         // "A Bitmap containing a representative video frame" so it should be fine
         // but in reality it can return really bad frames like full black image when a clearly better choice exists
