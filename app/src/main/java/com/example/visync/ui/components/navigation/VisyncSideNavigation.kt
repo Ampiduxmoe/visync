@@ -1620,3 +1620,28 @@ fun Modifier.bottomInnerShadow(
         )
     }
 }
+
+fun Modifier.topInnerShadow(
+    height: Dp,
+    alpha: Float,
+    color: Color,
+): Modifier = composed {
+    val shadowHeightPx = with(LocalDensity.current) {
+        height.toPx()
+    }
+    drawWithContent {
+        drawContent()
+        val gradientBrush = Brush.verticalGradient(
+            colors = listOf(
+                color,
+                Color.Transparent,
+            ),
+            startY = 0f,
+            endY = shadowHeightPx
+        )
+        drawRect(
+            brush = gradientBrush,
+            alpha = alpha
+        )
+    }
+}

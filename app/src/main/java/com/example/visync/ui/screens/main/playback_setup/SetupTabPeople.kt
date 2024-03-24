@@ -8,6 +8,8 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.net.Uri
 import android.util.Log
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -45,13 +47,14 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,7 +63,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
@@ -113,6 +115,7 @@ import com.example.visync.messaging.SyncBallMessage
 import com.example.visync.metadata.VideoMetadata
 import com.example.visync.ui.components.navigation.GenericAlertDialog
 import com.example.visync.ui.components.navigation.getGreatestCommonDivisor
+import com.example.visync.ui.components.navigation.topInnerShadow
 import com.example.visync.ui.screens.player.VisyncPhysicalDevice
 import com.example.visync.ui.screens.settings.getProfilePreferences
 import kotlinx.coroutines.Dispatchers
@@ -123,6 +126,7 @@ import kotlinx.coroutines.launch
 import java.lang.IllegalArgumentException
 import kotlin.math.absoluteValue
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -815,6 +819,11 @@ fun DevicesPositionConfigurationEditor(
         )
     }
 
+    val bgTintColor = MaterialTheme.colorScheme.primary
+    val submenuTitleBgColor = bgTintColor
+    val submenuTitleContentColor = contentColorFor(submenuTitleBgColor)
+    val submenuContentBgColor = MaterialTheme.colorScheme.surface
+    val submenuContentColor = contentColorFor(submenuContentBgColor)
     val textMeasurer = rememberTextMeasurer()
     val baseEndpointIdStyle = MaterialTheme.typography.titleMedium
     val endpointIdStyle = remember {
@@ -917,14 +926,28 @@ fun DevicesPositionConfigurationEditor(
                         }
                     },
             ) {
-                drawRect(
-                    brush = tilePictureBrush,
-                    topLeft = backgroundImageOffset,
-                    size = Size(
+                drawWithLayer {
+                    val bgSize = Size(
                         width = size.width + tileSize * (offscreenTileCount * 2),
                         height = size.height + tileSize * (offscreenTileCount * 2)
-                    ),
-                )
+                    )
+                    val bgAlpha = 0.5f
+                    drawRect(
+                        brush = tilePictureBrush,
+                        topLeft = backgroundImageOffset,
+                        size = bgSize,
+                        alpha = 1.0f,
+//                        colorFilter = ColorFilter.tint(bgTintColor, blendMode = BlendMode.Overlay)
+                    )
+                    drawRect(
+                        color = Color.Black,
+                        topLeft = backgroundImageOffset,
+                        size = bgSize,
+                        alpha = 1f - bgAlpha,
+                        blendMode = BlendMode.DstOut
+                    )
+                }
+
                 val selectionColor = Color.White
                 val selectionStrokeWidth = 48f * camera.zoom
                 val selectionAlpha = 0.66f
@@ -1143,8 +1166,6 @@ fun DevicesPositionConfigurationEditor(
                     }
                 }
             }
-            val bgColor = Color.Black
-            val contentColor = Color.White
             val iconSize = 52.dp
             var currentDialog by remember { mutableStateOf(ConfigurationEditorDialogs.NONE) }
             Column(
@@ -1154,7 +1175,7 @@ fun DevicesPositionConfigurationEditor(
                 if (isAnythingSelected && currentDialog == ConfigurationEditorDialogs.NONE) {
                     Column(
                         modifier = Modifier
-                            .background(bgColor)
+                            .background(submenuTitleBgColor)
                             .fillMaxWidth()
                             .padding(horizontal = 24.dp, vertical = 12.dp)
                     ) {
@@ -1174,33 +1195,37 @@ fun DevicesPositionConfigurationEditor(
                         Text(
                             modifier = Modifier.fillMaxWidth(),
                             text = "Selected:",
-                            color = contentColor,
+                            color = submenuTitleContentColor,
                             style = MaterialTheme.typography.titleLarge
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             modifier = Modifier.fillMaxWidth(),
                             text = selectionString,
-                            color = contentColor,
+                            color = submenuTitleContentColor,
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
                 }
                 Spacer(modifier = Modifier.weight(1f))
+
+                val submenuTitleModifier = Modifier
+                    .background(submenuTitleBgColor)
+                    .padding(top = 12.dp, bottom = 12.dp, start = 24.dp, end = 24.dp)
+                val submenuContentModifier = Modifier
+                    .background(submenuContentBgColor)
+                    .padding(top = 8.dp, bottom = 16.dp, start = 24.dp, end = 24.dp)
                 if (currentDialog == ConfigurationEditorDialogs.HELP) {
-                    Column(
-                        modifier = Modifier
-                            .background(bgColor)
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
-                    ) {
+                    Column {
                         Row(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
+                            modifier = submenuTitleModifier
                         ) {
                             Text(
                                 modifier = Modifier.weight(1f),
                                 text = "Help",
-                                color = contentColor,
+                                color = submenuTitleContentColor,
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Box(
@@ -1208,39 +1233,89 @@ fun DevicesPositionConfigurationEditor(
                                 modifier = Modifier
                                     .size(iconSize * 0.67f)
                                     .clip(shape = CircleShape)
-                                    .background(contentColor)
+                                    .background(submenuTitleContentColor)
                                     .clickable { currentDialog = ConfigurationEditorDialogs.NONE }
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_close),
                                     contentDescription = stringResource(id = R.string.desc_configuration_close_icon),
-                                    tint = bgColor,
+                                    tint = submenuTitleBgColor,
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            modifier = Modifier.fillMaxWidth(),
-                            text = "Hello this is device configuration editor here you can configure devices :)", // TODO
-                            color = contentColor,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Column(
+                            modifier = submenuContentModifier
+                        ) {
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "This is the window where you can decide what part of the video each device should display.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "Controls:",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "To move this view, do a drag gesture.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "To zoom in/out, do a pinch gesture.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "To select a device, tap on it.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "To select/unselect a device, tap on it.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "To select/unselect the video, long press on it.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "To resize selected video, do a pinch gesture.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "To move selection, drag.",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
                 if (currentDialog == ConfigurationEditorDialogs.INFO) {
-                    Column(
-                        modifier = Modifier
-                            .background(bgColor)
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
-                    ) {
+                    Column {
                         Row(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
+                            modifier = submenuTitleModifier
                         ) {
                             Text(
                                 modifier = Modifier.weight(1f),
                                 text = "Information",
-                                color = contentColor,
+                                color = submenuTitleContentColor,
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Box(
@@ -1248,39 +1323,110 @@ fun DevicesPositionConfigurationEditor(
                                 modifier = Modifier
                                     .size(iconSize * 0.67f)
                                     .clip(shape = CircleShape)
-                                    .background(contentColor)
+                                    .background(submenuTitleContentColor)
                                     .clickable { currentDialog = ConfigurationEditorDialogs.NONE }
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_close),
                                     contentDescription = stringResource(id = R.string.desc_configuration_close_icon),
-                                    tint = bgColor,
+                                    tint = submenuTitleBgColor,
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            modifier = Modifier.fillMaxWidth(),
-                            text = "Hello this is device information here's your information:", // TODO
-                            color = contentColor,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Column(
+                            modifier = submenuContentModifier
+                        ) {
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "Video:",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val videoName = video.videoMetadata.filename
+                            val videoDurationSeconds = video.videoMetadata.duration / 1000
+                            val videoDurationMillis = video.videoMetadata.duration
+                            val videoDuration =
+                                "${videoDurationSeconds}s (${videoDurationMillis}ms)"
+                            val videoWidth = video.videoMetadata.width.toInt()
+                            val videoHeight = video.videoMetadata.height.toInt()
+                            val videoRes = "${videoWidth}x${videoHeight}"
+                            val videoMmWidthString = "%.2f".format(video.mmWidth)
+                            val videoMmHeightString = "%.2f".format(video.mmHeight)
+                            val videoDimensions =
+                                "${videoMmWidthString}mm x ${videoMmHeightString}mm"
+                            Column {
+                                Text(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    text = "Name: $videoName",
+                                    color = submenuContentColor,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    text = "Duration: $videoDuration",
+                                    color = submenuContentColor,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    text = "Resolution: $videoRes",
+                                    color = submenuContentColor,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Text(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    text = "Current dimensions: $videoDimensions",
+                                    color = submenuContentColor,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "Connected devices:",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            for (device in devices) {
+                                Column {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            modifier = Modifier.background(color = Color(device.brushColor)),
+                                            text = "     ",
+                                            color = submenuContentColor,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        val endpointId =
+                                            device.watcherInfo.endpointId.ifEmpty { "UNKNOWN" }
+                                        Text(
+                                            text = "${device.watcherInfo.username} [$endpointId]",
+                                            color = submenuContentColor,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 if (currentDialog == ConfigurationEditorDialogs.SETTINGS) {
                     Column(
-                        modifier = Modifier
-                            .background(bgColor)
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                        modifier = Modifier.fillMaxHeight(0.4f)
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
+                            modifier = submenuTitleModifier,
                         ) {
                             Text(
                                 modifier = Modifier.weight(1f),
                                 text = "Settings",
-                                color = contentColor,
+                                color = submenuTitleContentColor,
                                 style = MaterialTheme.typography.titleLarge
                             )
                             Box(
@@ -1288,23 +1434,194 @@ fun DevicesPositionConfigurationEditor(
                                 modifier = Modifier
                                     .size(iconSize * 0.67f)
                                     .clip(shape = CircleShape)
-                                    .background(contentColor)
+                                    .background(submenuTitleContentColor)
                                     .clickable { currentDialog = ConfigurationEditorDialogs.NONE }
                             ) {
                                 Icon(
                                     painter = painterResource(id = R.drawable.ic_close),
                                     contentDescription = stringResource(id = R.string.desc_configuration_close_icon),
-                                    tint = bgColor,
+                                    tint = submenuTitleBgColor,
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            modifier = Modifier.fillMaxWidth(),
-                            text = "Hello this is settings here you can finetune your config :)", // TODO
-                            color = contentColor,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Column(
+                            modifier = Modifier
+                                .topInnerShadow(
+                                    height = 16.dp,
+                                    alpha = 0.05f,
+                                    color = submenuContentColor
+                                )
+                                .verticalScroll(rememberScrollState())
+                                .then(submenuContentModifier)
+                        ) {
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "View:",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DecoratedSetting {
+                                Column {
+                                    Text(
+                                        text = "zoom:  %.2fx".format(camera.zoom),
+                                        color = submenuContentColor,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    Slider(
+                                        value = camera.zoom,
+                                        onValueChange = {
+                                            val mmCenter = Offset(
+                                                x = pxToMm(pxEditorWidth / 2) + camera.mmViewOffsetX,
+                                                y = pxToMm(pxEditorHeight / 2) + camera.mmViewOffsetY
+                                            )
+                                            camera = camera.zoomedTo(
+                                                targetZoom = it,
+                                                mmPivotPoint = mmCenter,
+                                            )
+                                        },
+                                        valueRange = EditorCameraView.MIN_ZOOM..EditorCameraView.MAX_ZOOM,
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DecoratedSetting {
+                                CoordinateShiftSetting(
+                                    label = "x",
+                                    value = camera.mmViewOffsetX,
+                                    maxChange = 100f,
+                                    onValueChange = {
+                                        camera = camera.copy(
+                                            mmViewOffsetX = it
+                                        )
+                                    },
+                                    contentColor = submenuContentColor,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DecoratedSetting {
+                                CoordinateShiftSetting(
+                                    label = "y",
+                                    value = camera.mmViewOffsetY,
+                                    maxChange = 100f,
+                                    onValueChange = {
+                                        camera = camera.copy(
+                                            mmViewOffsetY = it
+                                        )
+                                    },
+                                    contentColor = submenuContentColor,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                modifier = Modifier.fillMaxWidth(),
+                                text = "Video:",
+                                color = submenuContentColor,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DecoratedSetting {
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        val textStyle = MaterialTheme.typography.bodyMedium
+                                        Text(
+                                            text = "width:  %.2fmm".format(video.mmWidth),
+                                            color = submenuContentColor,
+                                            style = textStyle,
+                                        )
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Text(
+                                            text = "height:  %.2fmm".format(video.mmHeight),
+                                            color = submenuContentColor,
+                                            style = textStyle,
+                                        )
+                                    }
+                                    Slider(
+                                        value = video.mmWidth,
+                                        onValueChange = {
+                                            video = video.zoomedBy(
+                                                zoomMultiplier = it / video.mmWidth,
+                                                mmPivotPoint = video.mmTopLeft,
+                                            )
+                                        },
+                                        valueRange = VideoOnEditor.MIN_WIDTH..VideoOnEditor.MAX_WIDTH,
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DecoratedSetting {
+                                CoordinateShiftSetting(
+                                    label = "x",
+                                    value = video.mmOffsetX,
+                                    maxChange = 100f,
+                                    onValueChange = {
+                                        video = video.copy(
+                                            mmOffsetX = it
+                                        )
+                                    },
+                                    contentColor = submenuContentColor,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            DecoratedSetting {
+                                CoordinateShiftSetting(
+                                    label = "y",
+                                    value = video.mmOffsetY,
+                                    maxChange = 100f,
+                                    onValueChange = {
+                                        video = video.copy(
+                                            mmOffsetY = it
+                                        )
+                                    },
+                                    contentColor = submenuContentColor,
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            for (device in devices) {
+                                val endpointId = device.watcherInfo.endpointId.ifEmpty { "UNKNOWN" }
+                                Text(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    text = "${device.watcherInfo.username} [$endpointId]:",
+                                    color = submenuContentColor,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                DecoratedSetting {
+                                    CoordinateShiftSetting(
+                                        labels = listOf("x (device)", "x (display)"),
+                                        values = listOf(device.mmOffsetX, device.displayLeft),
+                                        maxChange = 100f,
+                                        onValueChange = {
+                                            devices = devices.withMovedDevices(
+                                                devices = listOf(device),
+                                                offset = Offset(x = it - device.mmOffsetX, y = 0f),
+                                                respectCollisions = false,
+                                            )
+                                        },
+                                        contentColor = submenuContentColor,
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                DecoratedSetting {
+                                    CoordinateShiftSetting(
+                                        labels = listOf("y (device)", "y (display)"),
+                                        values = listOf(device.mmOffsetY, device.displayTop),
+                                        maxChange = 100f,
+                                        onValueChange = {
+                                            devices = devices.withMovedDevices(
+                                                devices = listOf(device),
+                                                offset = Offset(x = 0f, y = it - device.mmOffsetY),
+                                                respectCollisions = false,
+                                            )
+                                        },
+                                        contentColor = submenuContentColor,
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -1325,13 +1642,13 @@ fun DevicesPositionConfigurationEditor(
                             modifier = Modifier
                                 .size(iconSize)
                                 .clip(shape = CircleShape)
-                                .background(bgColor)
+                                .background(submenuTitleBgColor)
                                 .clickable { currentDialog = ConfigurationEditorDialogs.HELP }
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_question_mark),
                                 contentDescription = stringResource(id = R.string.desc_configuration_help_icon),
-                                tint = contentColor,
+                                tint = submenuTitleContentColor,
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1340,13 +1657,13 @@ fun DevicesPositionConfigurationEditor(
                             modifier = Modifier
                                 .size(iconSize)
                                 .clip(shape = CircleShape)
-                                .background(bgColor)
+                                .background(submenuTitleBgColor)
                                 .clickable { currentDialog = ConfigurationEditorDialogs.INFO }
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_info_mark),
                                 contentDescription = stringResource(id = R.string.desc_configuration_info_icon),
-                                tint = contentColor,
+                                tint = submenuTitleContentColor,
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1355,13 +1672,13 @@ fun DevicesPositionConfigurationEditor(
                             modifier = Modifier
                                 .size(iconSize)
                                 .clip(shape = CircleShape)
-                                .background(bgColor)
+                                .background(submenuTitleBgColor)
                                 .clickable { currentDialog = ConfigurationEditorDialogs.SETTINGS }
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Settings,
                                 contentDescription = stringResource(id = R.string.desc_configuration_settings_icon),
-                                tint = contentColor,
+                                tint = submenuTitleContentColor,
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1370,13 +1687,13 @@ fun DevicesPositionConfigurationEditor(
                             modifier = Modifier
                                 .size(iconSize)
                                 .clip(shape = CircleShape)
-                                .background(bgColor)
+                                .background(submenuTitleBgColor)
                                 .clickable { saveConfigAndCloseEditor() }
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_check),
                                 contentDescription = stringResource(id = R.string.desc_configuration_save_icon),
-                                tint = contentColor,
+                                tint = submenuTitleContentColor,
                             )
                         }
                         if (false) {
@@ -1437,7 +1754,8 @@ private fun getUsername(context: Context): String? {
 
 private fun List<DeviceOnEditor>.withMovedDevices(
     devices: List<DeviceOnEditor>,
-    offset: Offset
+    offset: Offset,
+    respectCollisions: Boolean = true,
 ): List<DeviceOnEditor> {
     val (selectedDevices, otherDevices) = this.partition { it in devices }
     val movedVersions = selectedDevices.map {
@@ -1446,8 +1764,10 @@ private fun List<DeviceOnEditor>.withMovedDevices(
             mmOffsetY = it.mmOffsetY + offset.y
         )
     }
-    if (movedVersions.any { it.isIntersectingAny(otherDevices) }) {
-        return this
+    if (respectCollisions) {
+        if (movedVersions.any { it.isIntersectingAny(otherDevices) }) {
+            return this
+        }
     }
     return this.toMutableList().apply {
         forEachIndexed { index, device ->
@@ -1697,13 +2017,7 @@ fun WatcherInfoDialog(
                 Row(
                     modifier = Modifier.height(IntrinsicSize.Min)
                 ) {
-                    Divider(
-                        modifier = Modifier
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                            .width(1.dp)
-                            .fillMaxHeight()
-                            .background(LocalContentColor.current)
-                    )
+                    VerticalDivider()
                     Column(
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                         modifier = Modifier
@@ -2098,4 +2412,193 @@ fun DrawScope.drawShadow(
 
 enum class ConfigurationEditorDialogs {
     NONE, HELP, INFO, SETTINGS
+}
+
+@Composable
+fun CoordinateShiftSlider(
+    /** Value from 0f to 1f */
+    startingPosition: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    valueRange: ClosedFloatingPointRange<Float>,
+    transformation: (Float) -> Float,
+    onValueChangeFinished: (UnevenSensitivitySliderScope.() -> Unit)?,
+) {
+    val minValue = valueRange.start
+    val maxValue = valueRange.endInclusive
+    val diff = maxValue - minValue
+    val coroutineScope = rememberCoroutineScope()
+    val animatedPosition = remember { Animatable(startingPosition) }
+    val unevenSensitivitySliderScope = remember {
+        UnevenSensitivitySliderScope(
+            animateSliderValue = {
+                coroutineScope.launch {
+                    animatedPosition.animateTo(
+                        targetValue = it,
+                        animationSpec = tween(
+                            durationMillis = 200,
+                            easing = FastOutSlowInEasing
+                        ),
+                    )
+                }
+            },
+            setSliderValue = {
+                coroutineScope.launch {
+                    animatedPosition.snapTo(it)
+                }
+            }
+        )
+    }
+    Slider(
+        value = animatedPosition.value,
+        onValueChange = {
+            unevenSensitivitySliderScope.setSliderPosition(it)
+            val newValue = minValue + diff * transformation(it)
+            onValueChange(newValue)
+        },
+        modifier = modifier,
+        valueRange = 0f..1f,
+        onValueChangeFinished = {
+            onValueChangeFinished?.let { unevenSensitivitySliderScope.it() }
+        },
+    )
+}
+
+@Composable
+fun CoordinateShiftSetting(
+    label: String,
+    value: Float,
+    maxChange: Float,
+    onValueChange: (Float) -> Unit,
+    contentColor: Color,
+) {
+    val textStyle = MaterialTheme.typography.bodyMedium
+    val flatAroundTheMiddleFunction = { it: Float ->
+        /** Describes how flat graph is around x=0.5.
+         *
+         * 1f means linear interpolation between 0 and 1: y=x.
+         * Values above 1f increase flatness and values below decrease it. */
+        val middleFlatness = 2.0f
+        if (it <= 0.5) {
+            0.5f * (2 * it).pow(1f / middleFlatness)
+        } else {
+            -0.5f * (2 * (-it + 1f)).pow(1f / middleFlatness)+ 1f
+        }
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = "$label:  %.2f".format(value),
+            color = contentColor,
+            style = textStyle,
+        )
+        var currentLeftBoundary by remember { mutableFloatStateOf(value - maxChange) }
+        var currentRightBoundary by remember { mutableFloatStateOf(value + maxChange) }
+        CoordinateShiftSlider(
+            startingPosition = 0.5f,
+            onValueChange = onValueChange,
+            valueRange = currentLeftBoundary..currentRightBoundary,
+            transformation = flatAroundTheMiddleFunction,
+            onValueChangeFinished = {
+                currentLeftBoundary = value - 100f
+                currentRightBoundary = value + 100f
+                animateSliderPosition(to = 0.5f)
+            },
+        )
+    }
+}
+
+@Composable
+fun CoordinateShiftSetting(
+    labels: List<String>,
+    values: List<Float>,
+    maxChange: Float,
+    onValueChange: (Float) -> Unit,
+    contentColor: Color,
+) {
+    val textStyle = MaterialTheme.typography.bodyMedium
+    val flatAroundTheMiddleFunction = { it: Float ->
+        /** Describes how flat graph is around x=0.5.
+         *
+         * 1f means linear interpolation between 0 and 1: y=x.
+         * Values above 1f increase flatness and values below decrease it. */
+        val middleFlatness = 2.0f
+        if (it <= 0.5) {
+            0.5f * (2 * it).pow(1f / middleFlatness)
+        } else {
+            -0.5f * (2 * (-it + 1f)).pow(1f / middleFlatness)+ 1f
+        }
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            for ((label, value) in labels.zip(values)) {
+                Text(
+                    text = "$label:  %.2f".format(value),
+                    color = contentColor,
+                    style = textStyle,
+                )
+            }
+        }
+
+        var currentLeftBoundary by remember { mutableFloatStateOf(values[0] - maxChange) }
+        var currentRightBoundary by remember { mutableFloatStateOf(values[0] + maxChange) }
+        CoordinateShiftSlider(
+            startingPosition = 0.5f,
+            onValueChange = onValueChange,
+            valueRange = currentLeftBoundary..currentRightBoundary,
+            transformation = flatAroundTheMiddleFunction,
+            onValueChangeFinished = {
+                currentLeftBoundary = values[0] - 100f
+                currentRightBoundary = values[0] + 100f
+                animateSliderPosition(to = 0.5f)
+            },
+        )
+    }
+}
+
+@Composable
+fun DecoratedSetting(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Row(
+        modifier = modifier.height(IntrinsicSize.Min)
+    ) {
+        VerticalDivider()
+        Spacer(modifier = Modifier.width(8.dp))
+        content()
+    }
+}
+
+class UnevenSensitivitySliderScope(
+    private val setSliderValue: (Float) -> Unit,
+    private val animateSliderValue: (Float) -> Unit,
+) {
+    fun setSliderPosition(position: Float) {
+        setSliderValue(position)
+    }
+    fun animateSliderPosition(to: Float) {
+        animateSliderValue(to)
+    }
+}
+
+@Composable
+fun VerticalDivider(
+    horizontalPadding: Dp = 8.dp,
+    verticalPadding: Dp = 4.dp,
+    color: Color = LocalContentColor.current,
+) {
+    Divider(
+        modifier = Modifier
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+            .width(1.dp)
+            .fillMaxHeight()
+            .background(color)
+    )
 }

@@ -2192,6 +2192,7 @@ data class VideoOnEditor(
     val originalWidth: Float = mmWidth,
     val originalHeight: Float = mmHeight,
 ) {
+    @Transient val mmTopLeft = Offset(x = mmOffsetX, y = mmOffsetY)
     @Transient val mmLeft = mmOffsetX
     @Transient val mmRight = mmLeft + mmWidth
     @Transient val mmTop = mmOffsetY
@@ -2295,13 +2296,13 @@ data class VideoOnEditor(
         )
     }
 
-    fun zoomedBy(zoomMultiplier: Float, mmPivotPoint: Offset): VideoOnEditor {
+    fun zoomedBy(zoomMultiplier: Float, mmPivotPoint: Offset = mmCenter): VideoOnEditor {
         if (zoomMultiplier == 1f) return this
         val videoTopLeft = Offset(x = mmOffsetX, y = mmOffsetY)
         val offsetChange = (mmPivotPoint - videoTopLeft) * ((zoomMultiplier - 1) / zoomMultiplier)
         val newWidth = mmWidth * zoomMultiplier
         val newHeight = mmHeight * zoomMultiplier
-        if (newWidth < 50f || newWidth > 500f) { return this }
+        if (newWidth < MIN_WIDTH || newWidth > MAX_WIDTH) { return this }
         val originalAspectRatio = originalWidth / originalHeight
         val newAspectRatio = newWidth / newHeight
         val aspectRatioDiff = (originalAspectRatio - newAspectRatio).absoluteValue
@@ -2320,6 +2321,11 @@ data class VideoOnEditor(
             mmWidth = newWidth,
             mmHeight = newHeight,
         )
+    }
+
+    companion object {
+        const val MIN_WIDTH = 50f
+        const val MAX_WIDTH = 500f
     }
 }
 
