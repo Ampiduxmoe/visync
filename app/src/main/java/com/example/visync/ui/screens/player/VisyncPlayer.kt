@@ -56,6 +56,7 @@ fun VisyncPlayer(
     closePlayer: () -> Unit,
     player: Player,
 ) {
+    // TODO: toggle immersive mode each time user returns to app
     val selectedVideofile = playerUiState.selectedVideofile
     val isOverlayVisible = playerUiState.isOverlayVisible
     val coroutineScope = rememberCoroutineScope()

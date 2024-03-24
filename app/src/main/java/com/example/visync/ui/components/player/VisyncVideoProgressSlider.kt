@@ -74,7 +74,7 @@ fun VideoProgressSlider(
     onSliderDragEnd: () -> Unit = {},
 ) {
     var sliderValue by remember { mutableFloatStateOf(0f) }
-    var isUserDraggingSlider by remember { mutableStateOf(true) }
+    var isUserDraggingSlider by remember { mutableStateOf(false) }
     LaunchedEffect(currentPosition, currentVideoDuration) {
         if (isUserDraggingSlider) {
             return@LaunchedEffect
