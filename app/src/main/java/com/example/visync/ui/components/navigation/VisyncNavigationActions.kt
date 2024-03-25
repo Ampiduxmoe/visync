@@ -46,7 +46,7 @@ val TOP_LEVEL_DESTINATIONS = listOf(
  *  hosting video playback to a room themselves or
  *  join existing room with someone who already started hosting.
  */
-val CONNECTION_MODE_DESTINATIONS = listOf(
+val CONNECTION_MODE_DESTINATIONS: List<Route> = listOf(
     Route.PlaybackSetup,
     Route.RoomsJoin
 )
@@ -56,10 +56,10 @@ val CONNECTION_MODE_DESTINATIONS = listOf(
  *  your profile, friends, rooms you are part of,
  *  or just app settings.
  */
-val ACCOUNT_RELATED_DESTINATIONS = listOf(
-    Route.MyProfile,
-    Route.Friends,
-    Route.RoomsManage,
+val ACCOUNT_RELATED_DESTINATIONS: List<Route> = listOf(
+//    Route.MyProfile,
+//    Route.Friends,
+//    Route.RoomsManage,
 )
 
 val MAIN_APP_DESTINATIONS = listOf(

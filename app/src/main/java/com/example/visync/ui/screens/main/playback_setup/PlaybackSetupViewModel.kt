@@ -1195,7 +1195,7 @@ abstract class PlaybackSetupGuest(
             _guestMutableStateFlow.update { it.copy(connectionStatus = value) }
         }
 
-    private var _discoveredRooms
+    private var _discoveredRooms // TODO: find out why previously discovered rooms show up on rooms screen
         get() = _guestMutableStateFlow.value.discoveredRooms
         set(value) {
             if (value == _discoveredRooms) { return }

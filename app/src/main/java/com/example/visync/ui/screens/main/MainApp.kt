@@ -35,8 +35,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.Button
@@ -60,10 +62,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -85,6 +90,7 @@ import com.example.visync.messaging.SyncBallMessage
 import com.example.visync.messaging.TextMessage
 import com.example.visync.player.PlayerWrapperPlaybackControls
 import com.example.visync.ui.PlaybackSetupOutput
+import com.example.visync.ui.components.navigation.GenericAlertDialog
 import com.example.visync.ui.components.navigation.VisyncNavigationActions
 import com.example.visync.ui.components.navigation.Route
 import com.example.visync.ui.components.navigation.MainAppNavigation
@@ -97,7 +103,6 @@ import com.example.visync.ui.screens.main.playback_setup.EmptyHostSpecificCallba
 import com.example.visync.ui.screens.main.playback_setup.EmptyPlaybackSetupCallbacks
 import com.example.visync.ui.screens.main.playback_setup.EndpointInfo
 import com.example.visync.ui.screens.main.playback_setup.GuestConnectionStatus
-import com.example.visync.ui.screens.main.playback_setup.GuestSetupTabSelectFilesPreview
 import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupGuestScreen
 import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupHostScreen
 import com.example.visync.ui.screens.main.playback_setup.PlaybackSetupUserState
@@ -313,13 +318,24 @@ fun MainApp(
                         playbackSetupViewModel.guestActions.stopPonging()
                     }
                 }
+                var showPermissionsDialog by remember { mutableStateOf(false) }
+                if (showPermissionsDialog) {
+                    AllRequiredPermissionsDialog(close = { showPermissionsDialog = false })
+                }
                 when (guestConnectionState.connectionStatus) {
                     GuestConnectionStatus.IDLE -> {
+                        val remainingPermissions = getNotGrantedPermissions()
                         IconButton(
-                            onClick = guestActions::startDiscoveringRooms
+                            onClick = {
+                                 if (remainingPermissions.isNotEmpty()) {
+                                     showPermissionsDialog = true
+                                 } else {
+                                    guestActions.startDiscoveringRooms()
+                                }
+                            }
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.PlayArrow,
+                                imageVector = Icons.Filled.Search,
                                 contentDescription = "start discovering"
                             )
                         }
@@ -332,8 +348,8 @@ fun MainApp(
                             onClick = guestActions::stopDiscoveringRooms
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Delete,
-                                contentDescription = "start discovering"
+                                imageVector = Icons.Filled.Clear,
+                                contentDescription = "stop discovering"
                             )
                         }
                         RoomsScreen(
@@ -835,4 +851,89 @@ fun devicePositionConfigurationToVideoConfiguration(
         mmDevicePositionX = targetDeviceInfo.displayLeft - video.mmOffsetX,
         mmDevicePositionY = targetDeviceInfo.displayTop - video.mmOffsetY
     )
+}
+
+@Composable
+fun AllRequiredPermissionsDialog(close: () -> Unit) {
+    GenericAlertDialog(onDismissRequest = { close() }) {
+        val notGrantedPermissions = getNotGrantedPermissions()
+        var remainingPermissions by remember { mutableStateOf(notGrantedPermissions) }
+        val askForPermissionsLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+            onResult = { grantStatuses ->
+                remainingPermissions = remainingPermissions.filter { return@filter !(grantStatuses[it]!!) }
+                close()
+            }
+        )
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "This app requires special permissions to be able to establish wireless connection between several devices",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center
+            )
+            Row {
+//                Spacer(modifier = Modifier.weight(1f))
+                Button(
+                    onClick = {
+                        if (remainingPermissions.isNotEmpty()) {
+                            Log.d(
+                                "permissions",
+                                "trying to ask for these permissions:\n${
+                                    remainingPermissions.joinToString(separator = "\n")
+                                }"
+                            )
+                            askForPermissionsLauncher.launch(remainingPermissions.toTypedArray())
+                        } else {
+                            close()
+                        }
+                    }
+                ) {
+                    Text("Grant permissions")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = "ask for required permissions"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun getNotGrantedPermissions(): List<String> {
+    @SuppressLint("InlinedApi")
+    val requiredPermissions = pickRequiredPermissions(
+        sdkVersion = Build.VERSION.SDK_INT,
+        permissionsWithVersions = listOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION  to  1..999,
+            Manifest.permission.ACCESS_FINE_LOCATION    to 29..999,
+            Manifest.permission.BLUETOOTH_ADVERTISE     to 31..999,
+            Manifest.permission.BLUETOOTH_CONNECT       to 31..999,
+            Manifest.permission.BLUETOOTH_SCAN          to 31..999,
+            Manifest.permission.NEARBY_WIFI_DEVICES     to 33..999,
+
+            Manifest.permission.READ_EXTERNAL_STORAGE   to 1..32,
+            Manifest.permission.READ_MEDIA_VIDEO        to 33..999,
+        )
+    )
+    val context = LocalContext.current
+    val permissionsStatus = requiredPermissions.associateWith {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+    val remainingPermissions = permissionsStatus
+        .filter { !it.value }
+        .map { it.key }
+    return remainingPermissions
+}
+
+@Composable
+@Preview(widthDp=240)
+fun AllRequiredPermissionsDialogPreview() {
+    AllRequiredPermissionsDialog({})
 }

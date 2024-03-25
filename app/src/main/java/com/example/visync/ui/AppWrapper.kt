@@ -53,8 +53,7 @@ fun AppWrapper(
     val navStateUsername = sideNavigationUiState.editableUsername.value
     val navStatePhysicalDevice = sideNavigationUiState.editablePhysicalDevice.value
     val navStateHasPlaceholders =
-            navStateUsername == mainAppViewModel.usernamePlaceholder ||
-            navStatePhysicalDevice == mainAppViewModel.physicalDevicePlaceholder
+            navStateUsername == mainAppViewModel.usernamePlaceholder
     if (navStateHasPlaceholders) {
         mainAppViewModel.initializeNavigationUiState(context)
         return
